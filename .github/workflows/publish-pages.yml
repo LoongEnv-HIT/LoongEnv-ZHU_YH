@@ -1,4 +1,4 @@
-name: DEPLOY_AI
+name: PUBLISH_PAGES
 
 on:
   workflow_dispatch:

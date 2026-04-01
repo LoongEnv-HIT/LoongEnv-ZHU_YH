@@ -9,7 +9,7 @@
 - [LoongEnv_IDE 在线预览](https://loongenv-hit.github.io/LoongEnv-ZHU_YH/LoongEnv_IDE/)
 - [LoonEnv_DeskTop 在线预览](https://loongenv-hit.github.io/LoongEnv-ZHU_YH/LoonEnv_DeskTop/)
 
-## AI 手动执行入口
+## 组织发布入口
 
-- [运行 DEPLOY_AI](https://github.com/LoongEnv-HIT/LoongEnv-ZHU_YH/actions/workflows/deploy-ai.yml)
+- [运行 DEPLOY_AI](https://github.com/LoongEnv-HIT/LoongEnv/actions/workflows/deploy-ai.yml)
 - [查看成员仓 Actions](https://github.com/LoongEnv-HIT/LoongEnv-ZHU_YH/actions)
