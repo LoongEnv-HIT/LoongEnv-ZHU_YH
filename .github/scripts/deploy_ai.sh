@@ -42,6 +42,13 @@ detect_frontend_dirs() {
   echo "<body>"
   echo "  <h1>LoongEnv-ZHU_YH 在线预览</h1>"
   echo "  <p>以下页面由 <code>DEPLOY_AI</code> 自动扫描并发布。</p>"
+  echo "  <p><a href=\"https://github.com/LoongEnv-HIT/LoongEnv-ZHU_YH/actions/workflows/deploy-ai.yml\">进入 DEPLOY_AI 手动执行入口</a></p>"
+  echo "  <h2>AI 入口</h2>"
+  echo "  <ul>"
+  echo "    <li><a href=\"https://github.com/LoongEnv-HIT/LoongEnv-ZHU_YH/actions/workflows/deploy-ai.yml\">运行 DEPLOY_AI</a></li>"
+  echo "    <li><a href=\"https://github.com/LoongEnv-HIT/LoongEnv-ZHU_YH/actions\">查看 Actions 列表</a></li>"
+  echo "  </ul>"
+  echo "  <h2>在线预览项目</h2>"
   echo "  <ul>"
 } > "$site_dir/index.html"
 

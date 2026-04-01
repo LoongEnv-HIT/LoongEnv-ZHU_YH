@@ -1,12 +1,13 @@
 # ZHU_YH
 
-朱延河个人工作仓，当前纳入管理的项目包括 `Loongenv_Web` 和 `LoongEnv_IDE`。
+朱延河个人工作仓，当前纳入管理的项目包括 `Loongenv_Web`、`LoongEnv_IDE` 和 `LoonEnv_DeskTop`。
 
 ## 在线预览入口
 
 - [GitHub Pages 主页](https://loongenv-hit.github.io/LoongEnv-ZHU_YH/)
 - [Loongenv_Web 在线预览](https://loongenv-hit.github.io/LoongEnv-ZHU_YH/Loongenv_Web/)
 - [LoongEnv_IDE 在线预览](https://loongenv-hit.github.io/LoongEnv-ZHU_YH/LoongEnv_IDE/)
+- [LoonEnv_DeskTop 在线预览](https://loongenv-hit.github.io/LoongEnv-ZHU_YH/LoonEnv_DeskTop/)
 
 ## AI 手动执行入口
 
