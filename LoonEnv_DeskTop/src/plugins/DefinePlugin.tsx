@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Box, Settings, Layout, ChevronRight, ChevronLeft, CheckCircle2, Upload, Database, Plus, X, Play } from 'lucide-react';
+import { Box, Settings, Layout, Upload, Plus, X, Play } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Plugin } from '../types';
 import { cn } from '../lib/utils';
+import { CollapsibleSection } from '../components/CollapsibleSection';
 
 export const DefinePlugin: Plugin = {
   metadata: {
@@ -28,13 +29,13 @@ export const DefinePlugin: Plugin = {
     return (
       <div className="flex flex-col h-full bg-white text-[#333333] select-none">
         {/* VSCode-style Step Navigation */}
-        <div className="flex items-center px-2 bg-[#f3f3f3] border-b border-[#e5e5e5] shrink-0 overflow-x-auto no-scrollbar">
+        <div className="grid grid-cols-3 px-2 bg-[#f3f3f3] border-b border-[#e5e5e5] shrink-0 gap-1">
           {steps.map((step) => (
             <button
               key={step.id}
               onClick={() => setActiveStep(step.id)}
               className={cn(
-                "px-4 py-2.5 text-[11px] font-medium transition-all relative whitespace-nowrap flex items-center gap-2",
+                "min-w-0 px-2 py-2.5 text-[11px] font-medium transition-all relative flex flex-col items-center justify-center gap-1 text-center leading-snug rounded-sm",
                 activeStep === step.id 
                   ? "text-[#333333] border-b-2 border-[#007acc] bg-white/50" 
                   : "text-[#6f6f6f] hover:text-[#333333] hover:bg-[#e8e8e8]"
@@ -48,8 +49,7 @@ export const DefinePlugin: Plugin = {
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
           {activeStep === 1 && (
             <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              <section>
-                <h3 className="text-[10px] font-bold text-[#6f6f6f] uppercase tracking-wider mb-3 px-1">模型配置 (Model Configuration)</h3>
+              <CollapsibleSection title="模型配置 (Model Configuration)" defaultOpen>
                 <div className="space-y-1 border border-[#e5e5e5] rounded-sm overflow-hidden divide-y divide-[#f3f3f3]">
                   <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
                     <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">来源类型</span>
@@ -73,10 +73,9 @@ export const DefinePlugin: Plugin = {
                     </div>
                   </div>
                 </div>
-              </section>
+              </CollapsibleSection>
               
-              <section>
-                <h3 className="text-[10px] font-bold text-[#6f6f6f] uppercase tracking-wider mb-3 px-1">资产管理 (Asset Management)</h3>
+              <CollapsibleSection title="资产管理 (Asset Management)" defaultOpen={false}>
                 <div className="grid grid-cols-2 gap-3">
                   <button className="flex flex-col items-center justify-center gap-2 p-4 border border-[#e5e5e5] hover:border-[#007acc] hover:bg-[#f0f7ff] transition-all group rounded-sm shadow-sm">
                     <Upload className="w-5 h-5 text-[#6f6f6f] group-hover:text-[#007acc]" />
@@ -87,14 +86,13 @@ export const DefinePlugin: Plugin = {
                     <span className="text-[10px] font-bold text-[#6f6f6f] group-hover:text-[#333333] uppercase tracking-wider">模型库 (Mesh Library)</span>
                   </button>
                 </div>
-              </section>
+              </CollapsibleSection>
             </motion.div>
           )}
 
           {activeStep === 2 && (
             <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              <section>
-                <h3 className="text-[10px] font-bold text-[#6f6f6f] uppercase tracking-wider mb-3 px-1">全局物理参数 (Global Physics)</h3>
+              <CollapsibleSection title="全局物理参数 (Global Physics)" defaultOpen>
                 <div className="space-y-1 border border-[#e5e5e5] rounded-sm overflow-hidden divide-y divide-[#f3f3f3]">
                   <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
                     <span className="w-1/2 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">重力 (Gravity, m/s²)</span>
@@ -109,10 +107,9 @@ export const DefinePlugin: Plugin = {
                     <input type="number" defaultValue={50} className="w-1/2 bg-transparent text-[11px] text-right outline-none text-[#333333] font-mono" />
                   </div>
                 </div>
-              </section>
+              </CollapsibleSection>
 
-              <section>
-                <h3 className="text-[10px] font-bold text-[#6f6f6f] uppercase tracking-wider mb-3 px-1">材料属性 (Material Properties)</h3>
+              <CollapsibleSection title="材料属性 (Material Properties)" defaultOpen={false}>
                 <div className="space-y-2">
                   <div className="flex items-center gap-3 px-3 py-2.5 bg-white border border-[#e5e5e5] rounded-sm hover:border-[#007acc] cursor-pointer transition-all group shadow-sm">
                     <div className="w-3.5 h-3.5 bg-blue-500 rounded-sm shadow-sm" />
@@ -125,14 +122,13 @@ export const DefinePlugin: Plugin = {
                     <Settings className="w-3.5 h-3.5 text-[#6f6f6f] opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </div>
-              </section>
+              </CollapsibleSection>
             </motion.div>
           )}
 
           {activeStep === 3 && (
             <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              <section>
-                <h3 className="text-[10px] font-bold text-[#6f6f6f] uppercase tracking-wider mb-3 px-1">环境配置 (Environment)</h3>
+              <CollapsibleSection title="环境配置 (Environment)" defaultOpen>
                 <div className="space-y-1 border border-[#e5e5e5] rounded-sm overflow-hidden divide-y divide-[#f3f3f3]">
                   <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
                     <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">地面类型</span>
@@ -155,10 +151,9 @@ export const DefinePlugin: Plugin = {
                     </div>
                   </div>
                 </div>
-              </section>
+              </CollapsibleSection>
 
-              <section>
-                <h3 className="text-[10px] font-bold text-[#6f6f6f] uppercase tracking-wider mb-3 px-1">场景对象 (Scene Objects)</h3>
+              <CollapsibleSection title="场景对象 (Scene Objects)" defaultOpen>
                 <div className="border border-[#e5e5e5] rounded-sm divide-y divide-[#f3f3f3] shadow-sm overflow-hidden">
                   {['Table_01', 'Obstacle_Box', 'Camera_Rig'].map(obj => (
                     <div key={obj} className="flex items-center justify-between px-3 py-2.5 hover:bg-[#f9f9f9] cursor-pointer group transition-colors">
@@ -176,7 +171,7 @@ export const DefinePlugin: Plugin = {
                     <Plus className="w-3.5 h-3.5" /> 添加对象 (Add Object)
                   </button>
                 </div>
-              </section>
+              </CollapsibleSection>
             </motion.div>
           )}
         </div>

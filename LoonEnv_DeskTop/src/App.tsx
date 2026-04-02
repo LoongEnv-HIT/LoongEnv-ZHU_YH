@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Activity, 
   Cpu, 
@@ -107,13 +107,66 @@ const SchemaCard: React.FC<SchemaCardProps> = ({ title, data }) => {
 
 // --- Main App ---
 
+const SIDEBAR_DEFAULT_WIDTH = 420;
+const SIDEBAR_MIN_WIDTH = 380;
+const SIDEBAR_MAX_WIDTH = 560;
+const BOTTOM_PANEL_DEFAULT_HEIGHT = 220;
+const BOTTOM_PANEL_MIN_HEIGHT = 160;
+const BOTTOM_PANEL_MAX_HEIGHT = 360;
+
+type DragState =
+  | { type: 'sidebar'; startPos: number; startValue: number }
+  | { type: 'bottom'; startPos: number; startValue: number }
+  | null;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
 export default function App() {
   const [activeModuleId, setActiveModuleId] = useState('define');
   const [showCore, setShowCore] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
   const [isSideBarVisible, setIsSideBarVisible] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(BOTTOM_PANEL_DEFAULT_HEIGHT);
+  const [dragState, setDragState] = useState<DragState>(null);
 
   const activePlugin = PLUGIN_REGISTRY.find(p => p.metadata.id === activeModuleId) || PLUGIN_REGISTRY[0];
+
+  useEffect(() => {
+    if (!dragState) {
+      return;
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (dragState.type === 'sidebar') {
+        const maxWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, window.innerWidth - 320));
+        setSidebarWidth(clamp(dragState.startValue + event.clientX - dragState.startPos, SIDEBAR_MIN_WIDTH, maxWidth));
+        return;
+      }
+
+      const maxHeight = Math.min(BOTTOM_PANEL_MAX_HEIGHT, Math.max(BOTTOM_PANEL_MIN_HEIGHT, Math.floor(window.innerHeight * 0.45)));
+      setBottomPanelHeight(clamp(dragState.startValue - (event.clientY - dragState.startPos), BOTTOM_PANEL_MIN_HEIGHT, maxHeight));
+    };
+
+    const handleMouseUp = () => setDragState(null);
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    document.body.style.cursor = dragState.type === 'sidebar' ? 'ew-resize' : 'ns-resize';
+    document.body.style.userSelect = 'none';
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [dragState]);
 
   return (
     <div className="h-screen bg-[#ffffff] text-[#333333] font-sans selection:bg-[#add6ff] flex flex-col overflow-hidden select-none">
@@ -184,7 +237,11 @@ export default function App() {
 
         {/* 2. Side Bar (Collapsible) */}
         {isSideBarVisible && (
-          <aside className="w-[320px] bg-[#f3f3f3] border-r border-[#e5e5e5] flex flex-col shrink-0 z-40 shadow-sm">
+          <>
+          <aside
+            style={{ width: sidebarWidth }}
+            className="bg-[#f3f3f3] border-r border-[#e5e5e5] flex flex-col shrink-0 z-40 shadow-sm min-w-0"
+          >
             <div className="h-9 px-4 flex items-center justify-between shrink-0 bg-[#f3f3f3]">
               <span className="text-[11px] text-[#6f6f6f] font-bold tracking-wider uppercase">
                 {showCore ? "资源管理器: 核心" : activePlugin.metadata.name}
@@ -278,6 +335,20 @@ export default function App() {
               )}
             </div>
           </aside>
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整操作面板宽度"
+            onMouseDown={(event) => setDragState({ type: 'sidebar', startPos: event.clientX, startValue: sidebarWidth })}
+            className="group w-2 shrink-0 cursor-ew-resize bg-white hover:bg-[#f5f9ff] transition-colors flex items-center justify-center"
+            title="拖动以调整操作面板宽度"
+          >
+            <div className={cn(
+              "h-full w-[3px] rounded-full transition-colors",
+              dragState?.type === 'sidebar' ? "bg-[#007acc]/60" : "bg-transparent group-hover:bg-[#007acc]/35"
+            )} />
+          </div>
+          </>
         )}
 
         {/* 3. Main Editor Area */}
@@ -320,8 +391,25 @@ export default function App() {
               <SimulationView />
             </div>
 
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="调整底部输出面板高度"
+            onMouseDown={(event) => setDragState({ type: 'bottom', startPos: event.clientY, startValue: bottomPanelHeight })}
+            className="group h-2 shrink-0 cursor-ns-resize bg-white hover:bg-[#f5f9ff] transition-colors flex items-center justify-center"
+            title="拖动以调整输出面板高度"
+          >
+            <div className={cn(
+              "h-[3px] w-full rounded-full transition-colors",
+              dragState?.type === 'bottom' ? "bg-[#007acc]/60" : "bg-transparent group-hover:bg-[#007acc]/35"
+            )} />
+          </div>
+
           {/* 4. Bottom Panel (Output/Terminal) */}
-          <div className="h-48 border-t border-[#e5e5e5] flex flex-col shrink-0">
+          <div
+            style={{ height: bottomPanelHeight }}
+            className="border-t border-[#e5e5e5] flex flex-col shrink-0 min-h-0"
+          >
             <SystemMonitor />
           </div>
         </main>
