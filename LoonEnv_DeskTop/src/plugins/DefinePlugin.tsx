@@ -5,19 +5,28 @@ import { Plugin } from '../types';
 import { cn } from '../lib/utils';
 import { CollapsibleSection } from '../components/CollapsibleSection';
 
+const ER15_JOINT_LIMITS = [
+  { joint: 'J1', position: '-2.967 ~ 2.967 rad', velocity: '未提供', torque: '未提供' },
+  { joint: 'J2', position: '-2.7925 ~ 1.5708 rad', velocity: '未提供', torque: '未提供' },
+  { joint: 'J3', position: '-1.4835 ~ 3.0543 rad', velocity: '未提供', torque: '未提供' },
+  { joint: 'J4', position: '-3.316 ~ 3.316 rad', velocity: '未提供', torque: '未提供' },
+  { joint: 'J5', position: '-2.2689 ~ 2.2689 rad', velocity: '未提供', torque: '未提供' },
+  { joint: 'J6', position: '-6.2832 ~ 6.2832 rad', velocity: '未提供', torque: '未提供' },
+] as const;
+
 export const DefinePlugin: Plugin = {
   metadata: {
     id: 'define',
     name: '机器人定义模块',
-    description: '定义机器人结构、传感器配置及任务目标。',
-    version: '1.0.0',
+    description: '加载并配置 ER15-1400 工业机器人模型、关节约束与仿真场景初始条件。',
+    version: '1.1.0',
     author: 'LoongEnv Core'
   },
   icon: <Box className="w-5 h-5" />,
   stepTitle: '机器人定义与建模',
-  techStack: ['URDF', 'MuJoCo WASM', 'Three.js'],
-  inputSchema: { type: 'URDF/MJCF', format: 'XML' },
-  outputSchema: { type: 'SceneGraph', format: 'JSON' },
+  techStack: ['MuJoCo WASM', 'MJCF', 'STL Mesh'],
+  inputSchema: { robot: 'ER15-1400', source: 'MJCF + STL', format: 'XML/Binary Mesh' },
+  outputSchema: { model: 'ER15-1400', joints: 6, scene: 'MuJoCo Runtime State' },
   component: ({ data, onAction }) => {
     const [activeStep, setActiveStep] = useState(1);
     const steps = [
@@ -52,12 +61,20 @@ export const DefinePlugin: Plugin = {
               <CollapsibleSection title="模型配置 (Model Configuration)" defaultOpen>
                 <div className="space-y-1 border border-[#e5e5e5] rounded-sm overflow-hidden divide-y divide-[#f3f3f3]">
                   <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
+                    <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">机器人型号</span>
+                    <div className="w-2/3">
+                      <select className="w-full bg-transparent text-[11px] outline-none cursor-pointer text-[#333333] font-medium">
+                        <option>ER15-1400</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
                     <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">来源类型</span>
                     <div className="w-2/3">
                       <select className="w-full bg-transparent text-[11px] outline-none cursor-pointer text-[#333333] font-medium">
+                        <option>内置模型资源 (Built-in Assets)</option>
                         <option>本地文件 (.xml, .urdf)</option>
                         <option>云端仓库</option>
-                        <option>程序化生成</option>
                       </select>
                     </div>
                   </div>
@@ -66,11 +83,19 @@ export const DefinePlugin: Plugin = {
                     <div className="w-2/3 flex gap-2">
                       <input 
                         type="text" 
-                        placeholder="/models/robot_arm.urdf"
+                        defaultValue="/robots/er15/er15-1400.mjcf.xml"
                         className="flex-1 bg-transparent text-[11px] outline-none text-[#333333] font-mono"
                       />
-                      <button className="text-[10px] text-[#007acc] hover:underline font-bold uppercase tracking-wider">浏览 (Browse)</button>
+                      <button className="text-[10px] text-[#007acc] hover:underline font-bold uppercase tracking-wider">定位 (Open)</button>
                     </div>
+                  </div>
+                  <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
+                    <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">关节配置</span>
+                    <span className="w-2/3 text-[11px] text-[#333333] font-medium">6 自由度转动关节 (Revolute, Z Axis)</span>
+                  </div>
+                  <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
+                    <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">模型边界</span>
+                    <span className="w-2/3 text-[11px] text-[#333333] font-medium">统计范围 extent = 2.2, center = [0, 0, 0.8]</span>
                   </div>
                 </div>
               </CollapsibleSection>
@@ -79,12 +104,15 @@ export const DefinePlugin: Plugin = {
                 <div className="grid grid-cols-2 gap-3">
                   <button className="flex flex-col items-center justify-center gap-2 p-4 border border-[#e5e5e5] hover:border-[#007acc] hover:bg-[#f0f7ff] transition-all group rounded-sm shadow-sm">
                     <Upload className="w-5 h-5 text-[#6f6f6f] group-hover:text-[#007acc]" />
-                    <span className="text-[10px] font-bold text-[#6f6f6f] group-hover:text-[#333333] uppercase tracking-wider">上传 URDF</span>
+                    <span className="text-[10px] font-bold text-[#6f6f6f] group-hover:text-[#333333] uppercase tracking-wider">上传替代 MJCF</span>
                   </button>
                   <button className="flex flex-col items-center justify-center gap-2 p-4 border border-[#e5e5e5] hover:border-[#007acc] hover:bg-[#f0f7ff] transition-all group rounded-sm shadow-sm">
                     <Box className="w-5 h-5 text-[#6f6f6f] group-hover:text-[#007acc]" />
-                    <span className="text-[10px] font-bold text-[#6f6f6f] group-hover:text-[#333333] uppercase tracking-wider">模型库 (Mesh Library)</span>
+                    <span className="text-[10px] font-bold text-[#6f6f6f] group-hover:text-[#333333] uppercase tracking-wider">7 个 STL 资源</span>
                   </button>
+                </div>
+                <div className="mt-3 rounded-sm border border-[#e5e5e5] bg-[#f8fafc] px-3 py-2 text-[11px] text-[#526070]">
+                  当前内置资源: <span className="font-mono text-[#333333]">b_link.STL, l_1 ~ l_6.STL</span>
                 </div>
               </CollapsibleSection>
             </motion.div>
@@ -106,19 +134,48 @@ export const DefinePlugin: Plugin = {
                     <span className="w-1/2 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">求解器迭代次数</span>
                     <input type="number" defaultValue={50} className="w-1/2 bg-transparent text-[11px] text-right outline-none text-[#333333] font-mono" />
                   </div>
+                  <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
+                    <span className="w-1/2 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">关节角限制</span>
+                    <span className="w-1/2 text-right text-[11px] text-[#333333] font-mono">J1 ~ J6 已写入 MJCF</span>
+                  </div>
                 </div>
+              </CollapsibleSection>
+
+              <CollapsibleSection title="关节约束 (Joint Limits)" defaultOpen>
+                <div className="overflow-hidden rounded-sm border border-[#e5e5e5] bg-white shadow-sm">
+                  <div className="grid grid-cols-[72px_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-[#e5e5e5] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[#6f6f6f]">
+                    <span>关节</span>
+                    <span>位置限制</span>
+                    <span>速度限制</span>
+                    <span>力矩限制</span>
+                  </div>
+                  {ER15_JOINT_LIMITS.map((limit) => (
+                    <div
+                      key={limit.joint}
+                      className="grid grid-cols-[72px_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-[#f1f5f9] px-3 py-2.5 text-[11px] last:border-b-0 hover:bg-[#f9fbfd]"
+                    >
+                      <span className="font-mono font-bold text-[#333333]">{limit.joint}</span>
+                      <span className="font-mono text-[#333333]">{limit.position}</span>
+                      <span className="font-mono text-[#6f6f6f]">{limit.velocity}</span>
+                      <span className="font-mono text-[#6f6f6f]">{limit.torque}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-[10px] leading-relaxed text-[#6f6f6f]">
+                  说明: 位置限制来自当前 ER15 MJCF/URDF。速度与力矩上限在现有导出文件中为 0，暂按“未提供”处理，后续建议补充厂家额定参数后再用于控制器与动力学约束。
+                </p>
               </CollapsibleSection>
 
               <CollapsibleSection title="材料属性 (Material Properties)" defaultOpen={false}>
                 <div className="space-y-2">
                   <div className="flex items-center gap-3 px-3 py-2.5 bg-white border border-[#e5e5e5] rounded-sm hover:border-[#007acc] cursor-pointer transition-all group shadow-sm">
-                    <div className="w-3.5 h-3.5 bg-blue-500 rounded-sm shadow-sm" />
-                    <span className="text-[11px] text-[#333333] flex-1 font-medium">钢材 (高摩擦)</span>
+                    <div className="w-3.5 h-3.5 bg-[#ff7a05] rounded-sm shadow-sm" />
+                    <span className="text-[11px] text-[#333333] flex-1 font-medium">KUKA 橙色连杆 (kuka_orange)</span>
                     <Settings className="w-3.5 h-3.5 text-[#6f6f6f] opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                   <div className="flex items-center gap-3 px-3 py-2.5 bg-white border border-[#e5e5e5] rounded-sm hover:border-[#007acc] cursor-pointer transition-all group shadow-sm">
-                    <div className="w-3.5 h-3.5 bg-slate-400 rounded-sm shadow-sm" />
-                    <span className="text-[11px] text-[#333333] flex-1 font-medium">橡胶 (弹性)</span>
+                    <div className="w-3.5 h-3.5 bg-[#34393d] rounded-sm shadow-sm" />
+                    <span className="text-[11px] text-[#333333] flex-1 font-medium">石墨底座 / 炭灰腕部 / 钢制法兰</span>
                     <Settings className="w-3.5 h-3.5 text-[#6f6f6f] opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </div>
@@ -134,9 +191,9 @@ export const DefinePlugin: Plugin = {
                     <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">地面类型</span>
                     <div className="w-2/3">
                       <select className="w-full bg-transparent text-[11px] outline-none cursor-pointer text-[#333333] font-medium">
+                        <option>MuJoCo 蓝色棋盘反射地面</option>
                         <option>无限网格</option>
                         <option>实验室地面</option>
-                        <option>户外地形</option>
                       </select>
                     </div>
                   </div>
@@ -144,18 +201,22 @@ export const DefinePlugin: Plugin = {
                     <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">光照配置</span>
                     <div className="w-2/3">
                       <select className="w-full bg-transparent text-[11px] outline-none cursor-pointer text-[#333333] font-medium">
+                        <option>MuJoCo 样例双方向光</option>
                         <option>摄影棚 (默认)</option>
-                        <option>日光</option>
                         <option>高对比度</option>
                       </select>
                     </div>
+                  </div>
+                  <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
+                    <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">展示姿态</span>
+                    <span className="w-2/3 text-[11px] text-[#333333] font-medium">ER15 Showcase QPos 已预置</span>
                   </div>
                 </div>
               </CollapsibleSection>
 
               <CollapsibleSection title="场景对象 (Scene Objects)" defaultOpen>
                 <div className="border border-[#e5e5e5] rounded-sm divide-y divide-[#f3f3f3] shadow-sm overflow-hidden">
-                  {['Table_01', 'Obstacle_Box', 'Camera_Rig'].map(obj => (
+                  {['MuJoCo Floor Plane', 'Key Directional Light', 'Fill Directional Light', 'Orbit Camera Rig'].map(obj => (
                     <div key={obj} className="flex items-center justify-between px-3 py-2.5 hover:bg-[#f9f9f9] cursor-pointer group transition-colors">
                       <div className="flex items-center gap-3">
                         <Box className="w-3.5 h-3.5 text-blue-500" />
@@ -168,7 +229,7 @@ export const DefinePlugin: Plugin = {
                     </div>
                   ))}
                   <button className="w-full py-2.5 text-[10px] text-[#007acc] hover:bg-[#f0f7ff] flex items-center justify-center gap-2 font-bold uppercase tracking-wider transition-colors">
-                    <Plus className="w-3.5 h-3.5" /> 添加对象 (Add Object)
+                    <Plus className="w-3.5 h-3.5" /> 添加场景资源 (Add Asset)
                   </button>
                 </div>
               </CollapsibleSection>

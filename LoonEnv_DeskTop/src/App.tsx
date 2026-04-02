@@ -107,7 +107,7 @@ const SchemaCard: React.FC<SchemaCardProps> = ({ title, data }) => {
 
 // --- Main App ---
 
-const SIDEBAR_DEFAULT_WIDTH = 420;
+const SIDEBAR_DEFAULT_WIDTH = 560;
 const SIDEBAR_MIN_WIDTH = 380;
 const SIDEBAR_MAX_WIDTH = 560;
 const BOTTOM_PANEL_DEFAULT_HEIGHT = 220;
