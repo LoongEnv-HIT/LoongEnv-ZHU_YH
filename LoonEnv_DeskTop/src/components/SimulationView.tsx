@@ -6,7 +6,7 @@ import { Activity } from 'lucide-react';
 import loadMujoco from 'mujoco-js';
 
 const SCENE_FILE = 'er15-1400.mjcf.xml';
-const MODEL_PUBLIC_ROOT = '/robots/er15';
+const MODEL_PUBLIC_ROOT = new URL('robots/er15/', document.baseURI).toString().replace(/\/$/, '');
 const SHOWCASE_QPOS = [0.55, -1.18, 1.36, 0.18, 0.92, 0.0];
 const ASSET_FILES = [
   'er15-1400.mjcf.xml',
