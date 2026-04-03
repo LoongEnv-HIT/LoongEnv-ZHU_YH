@@ -1,0 +1,100 @@
+{
+  "id": "perfopt",
+  "name": "PerfOpt",
+  "description": "控制器优化算法库模块，负责控制算法候选、优化调度、仿真评估与 replay 结果生成。",
+  "version": "0.1.0",
+  "moduleRoot": "backend/perfopt_v0",
+  "runtime": {
+    "kind": "python_http_service",
+    "entry": "backend/perfopt_v0/scripts/perfopt_http_backend.py"
+  },
+  "artifacts": {
+    "configs": "backend/perfopt_v0/configs",
+    "models": "backend/perfopt_v0/models",
+    "results": "backend/perfopt_v0/artifacts/http_optimize_results"
+  },
+  "algorithms": [
+    {
+      "id": "computed_torque_control",
+      "name": "计算力矩控制",
+      "categoryId": "controller_design",
+      "categoryLabel": "控制器设计",
+      "family": "控制算法设计 (Controller Design)",
+      "taskType": "给定参考轨迹下的计算力矩跟踪控制",
+      "candidateStructure": "inverse dynamics + feedback stabilization + constraint handling",
+      "backendModuleId": "perfopt",
+      "backendModuleName": "PerfOpt",
+      "backendSummary": "PerfOpt 控制器优化后端 + MuJoCo CPU + replayable result JSON",
+      "supportedRobotModels": ["ER15-1400", "KUKA KR300 R2500 ultra"],
+      "whyItMatters": "它是当前控制器优化主线中的一个具体控制算法，后端由 PerfOpt 统一负责优化、评估和回放生成。",
+      "synthesisFlow": [
+        { "title": "1. 任务与参考轨迹定义", "summary": "定义关节/末端参考轨迹、工况边界、采样周期与控制目标，形成统一任务画像。" },
+        { "title": "2. 动力学前馈项构造", "summary": "基于机器人模型计算逆动力学项，将期望 q / qd / qdd 映射为前馈力矩。" },
+        { "title": "3. 稳定化反馈回路设计", "summary": "叠加 PD/PID 等反馈项，补偿建模误差、外部扰动与状态偏差。" },
+        { "title": "4. 约束与安全策略绑定", "summary": "统一纳入关节位置、速度、力矩、饱和与异常回退逻辑，确保候选方案可执行。" },
+        { "title": "5. 闭环仿真评估", "summary": "在 MuJoCo 中执行真实闭环 rollout，记录 qpos、误差、力矩与约束利用率。" },
+        { "title": "6. 参数调优与结果回放", "summary": "搜索反馈增益和补偿参数，输出可复现 replay、验证报告与设计结果包。" }
+      ],
+      "modes": [
+        { "mode": "full_ctc", "meaning": "完整计算力矩前馈 + 状态反馈稳定化" },
+        { "mode": "pd_plus_id", "meaning": "逆动力学前馈 + PD 误差反馈" },
+        { "mode": "robust_ctc", "meaning": "带额外鲁棒补偿项的计算力矩控制" }
+      ],
+      "metrics": [
+        { "name": "tracking_rmse", "meaning": "轨迹跟踪均方根误差" },
+        { "name": "settling_time", "meaning": "进入稳态误差带所需时间" },
+        { "name": "overshoot", "meaning": "超调量" },
+        { "name": "torque_peak", "meaning": "峰值力矩" },
+        { "name": "constraint_margin", "meaning": "距离约束边界的安全裕度" }
+      ],
+      "validationGates": [
+        "跟踪误差满足工况要求",
+        "位置 / 速度 / 力矩约束未越界",
+        "控制结构、动力学项与参数可解释",
+        "结果可通过 replay 在相同工况下复现"
+      ]
+    },
+    {
+      "id": "peropt_forward_feedback",
+      "name": "前馈+反馈控制优化",
+      "categoryId": "controller_design",
+      "categoryLabel": "控制器设计",
+      "family": "控制算法设计 (Controller Design)",
+      "taskType": "固定参考轨迹跟踪",
+      "candidateStructure": "6 Joint PID + inverse dynamics feedforward",
+      "backendModuleId": "perfopt",
+      "backendModuleName": "PerfOpt",
+      "backendSummary": "PerfOpt 控制器优化后端 + MuJoCo CPU + replayable result JSON",
+      "supportedRobotModels": ["ER15-1400", "KUKA KR300 R2500 ultra"],
+      "whyItMatters": "它证明了“算法候选定义 → 后端优化执行 → 可回放验证结果”这条通用 Design 主线已经可运行。",
+      "synthesisFlow": [
+        { "title": "1. 参考轨迹生成", "summary": "生成 q_ref / qd_ref / qdd_ref，当前主线采用余弦位移轨迹，保证 t=0 速度为 0 且数值稳定。" },
+        { "title": "2. 前馈 + 反馈控制合成", "summary": "控制器由 6 关节独立 PID 和逆动力学前馈组成，支持 ff_mode = no / ref / meas / ideal。" },
+        { "title": "3. 工程约束执行", "summary": "在每个仿真 tick 内施加关节限位、速度上限、力矩限幅；ideal 模式仅作为理论上限对照。" },
+        { "title": "4. MuJoCo 仿真评估", "summary": "通过 CPU + MuJoCo rollout 执行单次实验，并记录 tcp、tau、qd 等时序数据。" },
+        { "title": "5. 指标与损失汇总", "summary": "统一输出 cycle_time、e_max、rmse、vib_energy、energy、torque_stats，并合成为可解释 loss。" },
+        { "title": "6. 并行优化与回放", "summary": "通过 Optuna 单/多进程调度搜索 Pareto 优值，再用真实结果 JSON 进行可复现回放与对比。" }
+      ],
+      "modes": [
+        { "mode": "no", "meaning": "纯 PID，无前馈" },
+        { "mode": "ref", "meaning": "ID(q_ref, qd_ref, qdd_ref) + PID" },
+        { "mode": "meas", "meaning": "ID(q_meas, qd_meas, qdd_ref) + PID" },
+        { "mode": "ideal", "meaning": "理论 computed-torque 上限，用于上限对照" }
+      ],
+      "metrics": [
+        { "name": "cycle_time", "meaning": "节拍 / 完成时间" },
+        { "name": "e_max", "meaning": "TCP 最大位置误差" },
+        { "name": "rmse", "meaning": "TCP 误差均方根" },
+        { "name": "vib_energy", "meaning": "振动能量代理指标" },
+        { "name": "energy", "meaning": "能耗代理指标（同 dt 内相对比较）" },
+        { "name": "torque_stats", "meaning": "关节力矩统计" }
+      ],
+      "validationGates": [
+        "约束满足：关节位置 / 速度 / 力矩不越界",
+        "设计可解释：算法结构、关键参数、loss 权重可追溯",
+        "结果可复现：result/replay artifact 与工况签名可回放",
+        "通过验证后导出设计结果包"
+      ]
+    }
+  ]
+}

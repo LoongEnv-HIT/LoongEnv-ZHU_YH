@@ -37,6 +37,7 @@ export const DiagnosePlugin: Plugin = {
   outputSchema: { health_score: 98, advice: '检查关节 3 (Check Joint 3)' },
   component: ({ data, onAction }) => {
     const [activeStep, setActiveStep] = useState(1);
+    const diagnoseConfig = data.projectConfig?.diagnose;
     const steps = [
       { id: 1, label: '数据源 (Data Source)', icon: <Database className="w-3.5 h-3.5" /> },
       { id: 2, label: '实时监控 (Monitoring)', icon: <Activity className="w-3.5 h-3.5" /> },
@@ -75,9 +76,15 @@ export const DiagnosePlugin: Plugin = {
                   </div>
                   <div>
                     <p className="text-[11px] font-bold text-[#333333]">WebSocket 数据流 (Stream)</p>
-                    <p className="text-[10px] text-[#6f6f6f]">ws://192.168.1.105:8080/stream</p>
+                    <p className="text-[10px] text-[#6f6f6f]">{diagnoseConfig?.streamUrl ?? 'ws://192.168.1.105:8080/stream'}</p>
                   </div>
                 </div>
+                <input
+                  value={diagnoseConfig?.streamUrl ?? ''}
+                  onChange={(event) => onAction('DIAGNOSE_CONFIG_UPDATED', { streamUrl: event.target.value })}
+                  className="w-full mt-3 rounded-sm border border-[#e5e5e5] px-3 py-2 text-[11px] outline-none"
+                  placeholder="数据流地址"
+                />
                 <button className="w-full mt-3 py-2 bg-[#333333] text-white rounded-sm text-[10px] font-bold hover:bg-[#1e1e1e] transition-all uppercase tracking-widest shadow-sm active:scale-[0.98]">
                   连接数据链路 (Connect Data Link)
                 </button>
@@ -85,25 +92,23 @@ export const DiagnosePlugin: Plugin = {
               
               <CollapsibleSection title="指标选择 (Metrics Selection)" defaultOpen>
                 <div className="grid grid-cols-2 gap-2.5">
-                  {['关节扭矩 (Torque)', '关节位置 (Position)', '末端速度 (Velocity)', '电机温度 (Temp)'].map((label) => (
+                  {['关节扭矩 (Torque)', '关节位置 (Position)', '末端速度 (Velocity)', '电机温度 (Temp)'].map((label) => {
+                    const selected = diagnoseConfig?.selectedMetrics?.includes(label) ?? false;
+                    return (
                     <div key={label} className="flex items-center gap-2.5 p-2.5 bg-white border border-[#e5e5e5] rounded-sm hover:border-[#007acc] transition-colors cursor-pointer group shadow-sm">
-                      <div className="w-3.5 h-3.5 border-2 border-[#e5e5e5] rounded-sm flex items-center justify-center group-hover:border-[#007acc] bg-white transition-colors">
-                        <CheckCircle2 className="w-2.5 h-2.5 text-[#007acc] opacity-100" />
+                      <div
+                        onClick={() => {
+                          const current = diagnoseConfig?.selectedMetrics ?? [];
+                          const next = selected ? current.filter((item) => item !== label) : [...current, label];
+                          onAction('DIAGNOSE_CONFIG_UPDATED', { selectedMetrics: next });
+                        }}
+                        className="w-3.5 h-3.5 border-2 border-[#e5e5e5] rounded-sm flex items-center justify-center group-hover:border-[#007acc] bg-white transition-colors"
+                      >
+                        <CheckCircle2 className={`w-2.5 h-2.5 text-[#007acc] ${selected ? 'opacity-100' : 'opacity-20'}`} />
                       </div>
                       <span className="text-[10px] text-[#333333] font-medium">{label}</span>
                     </div>
-                  ))}
-                </div>
-              </CollapsibleSection>
-
-              <CollapsibleSection title="数据包嗅探 (Packet Sniffer)" defaultOpen={false}>
-                <div className="bg-[#1e1e1e] rounded-sm p-3 font-mono text-[10px] text-[#d4d4d4] h-32 overflow-hidden relative shadow-lg border border-[#333333]">
-                  <div className="space-y-1.5">
-                    <p className="text-[#6a9955] opacity-80">{"// [已连接] WebSocket 已建立"}</p>
-                    <p className="text-[#9cdcfe]">[接收] <span className="text-[#ce9178]">{"{ \"id\": \"J1\", \"val\": 1.24 }" }</span></p>
-                    <p className="text-[#9cdcfe]">[接收] <span className="text-[#ce9178]">{"{ \"id\": \"J2\", \"val\": -0.45 }" }</span></p>
-                    <p className="text-[#d4d4d4] animate-pulse mt-1 opacity-50">_ 正在等待数据流稳定...</p>
-                  </div>
+                  )})}
                 </div>
               </CollapsibleSection>
             </motion.div>
@@ -176,26 +181,14 @@ export const DiagnosePlugin: Plugin = {
                   </div>
                 </section>
               </CollapsibleSection>
-              
-              <CollapsibleSection title="预测性维护 (Predictive Maintenance)" defaultOpen={false}>
-                <div className="bg-white border border-[#e5e5e5] rounded-sm p-4 space-y-3 shadow-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-[#333333] font-medium">关节 3 减速器寿命 (Life)</span>
-                    <span className="text-[10px] font-mono text-[#388a3c] font-bold">85%</span>
-                  </div>
-                  <div className="h-1 bg-[#f3f3f3] rounded-full overflow-hidden shadow-inner">
-                    <motion.div 
-                      initial={{ width: 0 }} 
-                      animate={{ width: '85%' }} 
-                      className="h-full bg-[#388a3c]" 
-                    />
-                  </div>
-                </div>
-              </CollapsibleSection>
 
-              <CollapsibleSection title="异常历史 (Anomaly History)" defaultOpen={false}>
-                <div className="text-[10px] text-[#6f6f6f] italic text-center py-6 border border-dashed border-[#e5e5e5] rounded-sm bg-[#fafafa]">
-                  过去 24 小时内未检测到严重异常。
+              <CollapsibleSection title="诊断摘要" defaultOpen>
+                <div className="rounded-sm border border-[#e5e5e5] bg-white px-3 py-3 text-[11px] text-[#526070] space-y-1.5">
+                  <div><span className="font-bold text-[#333333]">健康评分:</span> 98</div>
+                  <div><span className="font-bold text-[#333333]">故障预测:</span> 0.02%</div>
+                  <div><span className="font-bold text-[#333333]">主要建议:</span> 在设计阶段调整阻尼参数</div>
+                  <div><span className="font-bold text-[#333333]">数据源:</span> {diagnoseConfig?.streamUrl ?? '未配置'}</div>
+                  <div><span className="font-bold text-[#333333]">当前结论:</span> 系统稳定，可继续跟踪观察</div>
                 </div>
               </CollapsibleSection>
             </motion.div>

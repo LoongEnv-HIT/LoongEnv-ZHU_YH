@@ -1,0 +1,130 @@
+<mujoco model="kuka_kr300_r2500_ultra_with_hydraulic_loop">
+  <compiler angle="radian" meshdir="." autolimits="true" inertiafromgeom="true"/>
+  <option gravity="0 0 -9.81" timestep="0.001" integrator="implicitfast" iterations="200" />
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="220" elevation="-10"/>
+    <quality shadowsize="8192"/>
+  </visual>
+  <default>
+    <geom density="800" contype="0" conaffinity="0" />
+    <joint damping="8" armature="0.2" frictionloss="0.05" />
+  </default>
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+    <mesh name="mesh_base" file="KUKA-KR-300-R2500-ultra-base.stl" />
+    <mesh name="mesh_1" file="KUKA-KR-300-R2500-ultra-1.stl" />
+    <mesh name="mesh_2" file="KUKA-KR-300-R2500-ultra-2.stl" />
+    <mesh name="mesh_3" file="KUKA-KR-300-R2500-ultra-3.stl" />
+    <mesh name="mesh_4" file="KUKA-KR-300-R2500-ultra-4.stl" />
+    <mesh name="mesh_5" file="KUKA-KR-300-R2500-ultra-5.stl" />
+    <mesh name="mesh_6" file="KUKA-KR-300-R2500-ultra-6.stl" />
+    <mesh name="mesh_7" file="KUKA-KR-300-R2500-ultra-7.stl" />
+    <mesh name="mesh_8" file="KUKA-KR-300-R2500-ultra-8.stl" />
+    <mesh name="vmesh_base" file="obj/0.obj" />
+    <mesh name="cmesh_0" file="obj/0.obj" />
+    <mesh name="vmesh_0_0" file="obj/0_0.obj" />
+    <mesh name="vmesh_0_1" file="obj/0_1.obj" />
+    <mesh name="vmesh_0_2" file="obj/0_2.obj" />
+    <mesh name="vmesh_0_3" file="obj/0_3.obj" />
+    <mesh name="vmesh_0_4" file="obj/0_4.obj" />
+    <mesh name="vmesh_1" file="obj/1.obj" />
+    <mesh name="cmesh_1" file="obj/1.obj" />
+    <mesh name="vmesh_1_0" file="obj/1_0.obj" />
+    <mesh name="vmesh_1_1" file="obj/1_1.obj" />
+    <mesh name="vmesh_1_2" file="obj/1_2.obj" />
+    <mesh name="vmesh_2" file="obj/2.obj" />
+    <mesh name="cmesh_2" file="obj/2.obj" />
+    <mesh name="vmesh_2_0" file="obj/2_0.obj" />
+    <mesh name="vmesh_2_1" file="obj/2_1.obj" />
+    <mesh name="vmesh_2_2" file="obj/2_2.obj" />
+    <mesh name="vmesh_3" file="obj/3.obj" />
+    <mesh name="cmesh_3" file="obj/3.obj" />
+    <mesh name="vmesh_3_0" file="obj/3_0.obj" />
+    <mesh name="vmesh_3_1" file="obj/3_1.obj" />
+    <mesh name="vmesh_3_2" file="obj/3_2.obj" />
+    <mesh name="vmesh_4" file="obj/4.obj" />
+    <mesh name="vmesh_5" file="obj/5.obj" />
+    <mesh name="cmesh_5" file="obj/5.obj" />
+    <mesh name="vmesh_5_0" file="obj/5_0.obj" />
+    <mesh name="vmesh_5_1" file="obj/5_1.obj" />
+    <mesh name="vmesh_5_2" file="obj/5_2.obj" />
+    <mesh name="vmesh_6" file="obj/6.obj" />
+    <mesh name="cmesh_6" file="obj/6.obj" />
+    <mesh name="vmesh_6_0" file="obj/6_0.obj" inertia="shell" />
+    <mesh name="vmesh_6_1" file="obj/6_1.obj" inertia="shell" />
+    <mesh name="vmesh_6_2" file="obj/6_2.obj" inertia="shell" />
+    <mesh name="vmesh_6_3" file="obj/6_3.obj" inertia="shell" />
+    <mesh name="vmesh_7" file="obj/7.obj" />
+    <mesh name="vmesh_8" file="obj/8.obj" />
+  </asset>
+  <worldbody>
+    <light name="key_light" pos="3 0 4" dir="-1 0 -1" directional="true" diffuse="0.9 0.9 0.9"/>
+    <light name="fill_light" pos="-2 2 3" dir="0 -0.3 -1" directional="true" diffuse="0.35 0.35 0.4"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+    <body name="base_link" pos="0 0 0" quat="1 0 0 0">
+      <geom type="mesh" mesh="cmesh_0" contype="1" conaffinity="1" group="3" rgba="0 0 0 0" />
+      <geom type="mesh" mesh="vmesh_0_0" mass="0" rgba="0.388235 0.400000 0.356863 1" contype="0" conaffinity="0" group="1" />
+      <geom type="mesh" mesh="vmesh_0_1" mass="0" rgba="0.298039 0.298039 0.298039 1" contype="0" conaffinity="0" group="1" />
+      <geom type="mesh" mesh="vmesh_0_2" mass="0" rgba="0.368627 0.568627 0.619608 1" contype="0" conaffinity="0" group="1" />
+      <geom type="mesh" mesh="vmesh_0_3" mass="0" rgba="0.749020 0.749020 0.749020 1" contype="0" conaffinity="0" group="1" />
+      <geom type="mesh" mesh="vmesh_0_4" mass="0" rgba="0.498039 0.498039 0.498039 1" contype="0" conaffinity="0" group="1" />
+      <body name="link1" pos="0 0 0.705" >
+        <joint name="joint1" type="hinge" axis="0 0 1" range="-3.22885912 3.22885912" />
+        <geom type="mesh" mesh="cmesh_1" pos="-0 -0 -0.705" quat="1 -0 0 -0" contype="1" conaffinity="1" group="3" rgba="0 0 0 0" />
+        <geom type="mesh" mesh="vmesh_1_0" mass="0" rgba="1.000000 0.376471 0.000000 1" pos="-0 -0 -0.705" quat="1 -0 0 -0" contype="0" conaffinity="0" group="1" />
+        <geom type="mesh" mesh="vmesh_1_1" mass="0" rgba="0.298039 0.298039 0.298039 1" pos="-0 -0 -0.705" quat="1 -0 0 -0" contype="0" conaffinity="0" group="1" />
+        <geom type="mesh" mesh="vmesh_1_2" mass="0" rgba="0.498039 0.498039 0.498039 1" pos="-0 -0 -0.705" quat="1 -0 0 -0" contype="0" conaffinity="0" group="1" />
+        <body name="balancer_cylinder" pos="-0.446956 -0.244 -0.069725" >
+          <joint name="balancer_base_hinge" type="hinge" axis="0 1 0" range="-1.57079633 1.57079633" />
+          <geom type="mesh" mesh="vmesh_7" rgba="0.298039 0.298039 0.298039 1" pos="0.446956 0.244 -0.635275"/>
+          <body name="balancer_rod" pos="0.596956 0.004 0.069725">
+            <joint name="balancer_slide" type="slide" axis="0.993245 0.006655 0.116008" range="0 0.6" damping="40" armature="0.5" frictionloss="10" />
+            <geom type="mesh" mesh="vmesh_8" rgba="0.298039 0.298039 0.298039 1" pos="-0.15 0.24 -0.705"/>
+            <site name="rod_pin" pos="0 0 0" size="0.01" />
+          </body>
+        </body>
+        <body name="link2" pos="0.35 0 0.0" >
+          <joint name="joint2" type="hinge" axis="0 1 0" range="-0.872664626 1.48352986" />
+          <geom type="mesh" mesh="cmesh_2" pos="-0.35 0 -0.705 " contype="1" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="mesh" mesh="vmesh_2_0" mass="0" rgba="1.000000 0.376471 0.000000 1" pos="-0.35 0 -0.705 " contype="0" conaffinity="0" group="1" />
+          <geom type="mesh" mesh="vmesh_2_1" mass="0" rgba="0.298039 0.298039 0.298039 1" pos="-0.35 0 -0.705 " contype="0" conaffinity="0" group="1" />
+          <geom type="mesh" mesh="vmesh_2_2" mass="0" rgba="0.498039 0.498039 0.498039 1" pos="-0.35 0 -0.705 " contype="0" conaffinity="0" group="1" />
+            <site name="arm_pin" pos="-0.2 -0.24 0" size="0.01" />
+            <body name="link3" pos="0 0 1.15" quat="1 0 -0 -0">
+            <joint name="joint3" type="hinge" axis="0 1 0" range="-3.66519143 1.13446401" />
+            <geom type="mesh" mesh="cmesh_3" pos="-0.35 0 -1.855" contype="1" conaffinity="1" group="3" rgba="0 0 0 0" />
+            <geom type="mesh" mesh="vmesh_3_0" mass="0" rgba="1.000000 0.376471 0.000000 1" pos="-0.35 0 -1.855" contype="0" conaffinity="0" group="1" />
+            <geom type="mesh" mesh="vmesh_3_1" mass="0" rgba="0.498039 0.498039 0.498039 1" pos="-0.35 0 -1.855" contype="0" conaffinity="0" group="1" />
+            <geom type="mesh" mesh="vmesh_3_2" mass="0" rgba="0.298039 0.298039 0.298039 1" pos="-0.35 0 -1.855" contype="0" conaffinity="0" group="1" />
+            <body name="link4" pos="1 0 -0.041" >
+              <joint name="joint4" type="hinge" axis="1 0 0" range="-6.10865238 6.10865238" />
+              <geom type="mesh" mesh="vmesh_4" rgba="1.000000 0.376471 0.000000 1" pos="-1.35 0 -1.814"/>
+              <body name="link5" pos="0 0 0" >
+                <joint name="joint5" type="hinge" axis="0 1 0" range="-2.13802833 2.13802833" />
+                <geom type="mesh" mesh="cmesh_5" pos="-1.35 0 -1.814" contype="1" conaffinity="1" group="3" rgba="0 0 0 0"/>
+                <geom type="mesh" mesh="vmesh_5_0" mass="0" rgba="1.000000 0.376471 0.000000 1" pos="-1.35 0 -1.814" contype="0" conaffinity="0" group="1"/>
+                <geom type="mesh" mesh="vmesh_5_1" mass="0" rgba="0.298039 0.298039 0.298039 1" pos="-1.35 0 -1.814" contype="0" conaffinity="0" group="1"/>
+                <geom type="mesh" mesh="vmesh_5_2" mass="0" rgba="0.749020 0.749020 0.749020 1" pos="-1.35 0 -1.814" contype="0" conaffinity="0" group="1"/>
+                <body name="link6" pos="0 0 0" >
+                  <joint name="joint6" type="hinge" axis="1 0 0" range="-6.10865238 6.10865238" />
+                  <geom type="mesh" mesh="cmesh_6" pos="-1.35 0 -1.814" contype="1" conaffinity="1" group="3" rgba="0 0 0 0"/>
+                  <geom type="mesh" mesh="vmesh_6_0" mass="0" rgba="1.000000 0.000000 0.000000 1" pos="-1.35 0 -1.814" contype="0" conaffinity="0" group="1"/>
+                  <geom type="mesh" mesh="vmesh_6_1" mass="0" rgba="0.298039 0.298039 0.298039 1" pos="-1.35 0 -1.814" contype="0" conaffinity="0" group="1"/>
+                  <geom type="mesh" mesh="vmesh_6_2" mass="0" rgba="0.498039 0.498039 0.498039 1" pos="-1.35 0 -1.814" contype="0" conaffinity="0" group="1"/>
+                  <geom type="mesh" mesh="vmesh_6_3" mass="0" rgba="0.749020 0.749020 0.749020 1" pos="-1.35 0 -1.814" contype="0" conaffinity="0" group="1"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <equality>
+    <connect name="balancer_loop_close" site1="rod_pin" site2="arm_pin" solref="0.03 1" solimp="0.95 0.99 0.001" />
+  </equality>
+</mujoco>

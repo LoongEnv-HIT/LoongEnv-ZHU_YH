@@ -4,20 +4,13 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { Activity } from 'lucide-react';
 import loadMujoco from 'mujoco-js';
-
-const SCENE_FILE = 'er15-1400.mjcf.xml';
-const MODEL_PUBLIC_ROOT = new URL('robots/er15/', document.baseURI).toString().replace(/\/$/, '');
-const SHOWCASE_QPOS = [0.55, -1.18, 1.36, 0.18, 0.92, 0.0];
-const ASSET_FILES = [
-  'er15-1400.mjcf.xml',
-  'b_link.STL',
-  'l_1.STL',
-  'l_2.STL',
-  'l_3.STL',
-  'l_4.STL',
-  'l_5.STL',
-  'l_6.STL',
-] as const;
+import {
+  ER15_MODEL_NAME,
+  getRobotAssetDefinition,
+  getRobotAssetRoot,
+} from '../data/er15';
+import type { DefineArtifact } from '../types';
+import type { Er15Replay } from '../data/er15Replay';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -176,7 +169,10 @@ function buildGeom(module: MujocoModule, model: MujocoModel, geomIndex: number) 
   return mesh;
 }
 
-async function populateVirtualFileSystem(mujoco: MujocoModule) {
+async function populateVirtualFileSystem(mujoco: MujocoModule, robotModel: string) {
+  const definition = getRobotAssetDefinition(robotModel);
+  const assetRoot = getRobotAssetRoot(robotModel);
+
   try {
     mujoco.FS.unmount('/working');
   } catch {
@@ -189,13 +185,30 @@ async function populateVirtualFileSystem(mujoco: MujocoModule) {
   }
   mujoco.FS.mount(mujoco.MEMFS, { root: '.' }, '/working');
 
-  for (const file of ASSET_FILES) {
-    const response = await fetch(`${MODEL_PUBLIC_ROOT}/${file}`);
+  const ensureDirectory = (targetPath: string) => {
+    const segments = targetPath.split('/').filter(Boolean);
+    let currentPath = '';
+    for (const segment of segments) {
+      currentPath += `/${segment}`;
+      try {
+        mujoco.FS.mkdir(currentPath);
+      } catch {
+        // Directory may already exist.
+      }
+    }
+  };
+
+  for (const file of definition.assetFiles) {
+    const response = await fetch(`${assetRoot}/${file}`);
     if (!response.ok) {
       throw new Error(`无法加载资源文件: ${file}`);
     }
     const targetPath = `/working/${file}`;
-    if (file.endsWith('.xml')) {
+    const directory = targetPath.slice(0, targetPath.lastIndexOf('/'));
+    if (directory && directory !== '/working') {
+      ensureDirectory(directory);
+    }
+    if (file.endsWith('.xml') || file.endsWith('.obj') || file.endsWith('.mtl')) {
       mujoco.FS.writeFile(targetPath, await response.text());
     } else {
       mujoco.FS.writeFile(targetPath, new Uint8Array(await response.arrayBuffer()));
@@ -203,11 +216,36 @@ async function populateVirtualFileSystem(mujoco: MujocoModule) {
   }
 }
 
-export function SimulationView() {
+interface SimulationViewProps {
+  replay?: Er15Replay;
+  defineArtifact?: DefineArtifact;
+}
+
+export function SimulationView({ replay, defineArtifact }: SimulationViewProps) {
+  const robotModel = defineArtifact?.robotModel ?? ER15_MODEL_NAME;
+  const robotDefinition = getRobotAssetDefinition(robotModel);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const modelRef = React.useRef<MujocoModel | null>(null);
+  const dataRef = React.useRef<MujocoData | null>(null);
+  const moduleRef = React.useRef<MujocoModule | null>(null);
+  const replayRef = React.useRef<Er15Replay | null>(null);
+  const replayStartRef = React.useRef<number | null>(null);
+  const jointStateUpdateRef = React.useRef(0);
+  const [jointPositions, setJointPositions] = React.useState<number[]>([...robotDefinition.showcaseQpos]);
   const [loadState, setLoadState] = React.useState<LoadState>('loading');
   const [statusText, setStatusText] = React.useState('正在初始化 MuJoCo WASM...');
   const [errorText, setErrorText] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    replayRef.current = replay ?? null;
+    replayStartRef.current = replay ? performance.now() : null;
+    if (replay) {
+      setStatusText(`正在回放 ${replay.label}`);
+    } else {
+      setStatusText((current) => (current.startsWith('正在回放') ? `${robotDefinition.modelName} 默认机器人已载入` : current));
+      setJointPositions([...robotDefinition.showcaseQpos]);
+    }
+  }, [replay, robotDefinition.modelName, robotDefinition.showcaseQpos]);
 
   React.useEffect(() => {
     let disposed = false;
@@ -236,15 +274,18 @@ export function SimulationView() {
         }) as unknown as MujocoModule;
         if (disposed) return;
 
-        setStatusText(`正在载入 ${SCENE_FILE}...`);
-        await populateVirtualFileSystem(moduleInstance);
+        setStatusText(`正在载入 ${robotDefinition.sceneFile}...`);
+        await populateVirtualFileSystem(moduleInstance, robotDefinition.modelName);
         if (disposed) return;
 
-        setStatusText('正在编译 ER15 模型...');
-        model = moduleInstance.MjModel.loadFromXML(`/working/${SCENE_FILE}`);
+        setStatusText(`正在编译 ${robotDefinition.modelName} 模型...`);
+        model = moduleInstance.MjModel.loadFromXML(`/working/${robotDefinition.sceneFile}`);
         data = new moduleInstance.MjData(model);
+        modelRef.current = model;
+        dataRef.current = data;
+        moduleRef.current = moduleInstance;
 
-        SHOWCASE_QPOS.forEach((value, index) => {
+        robotDefinition.showcaseQpos.forEach((value, index) => {
           data!.qpos[index] = value;
         });
         moduleInstance.mj_forward(model, data);
@@ -352,6 +393,34 @@ export function SimulationView() {
         const step = () => {
           if (disposed || !renderer || !controls || !data) return;
 
+          const activeReplay = replayRef.current;
+          if (activeReplay && activeReplay.frames.length > 1 && modelRef.current && moduleRef.current && replayStartRef.current !== null) {
+            const elapsedMs = performance.now() - replayStartRef.current;
+            const replayDurationMs = Math.max(activeReplay.durationMs, 1);
+            const wrappedMs = activeReplay.loop ? elapsedMs % replayDurationMs : Math.min(elapsedMs, replayDurationMs);
+            const targetTime = wrappedMs / 1000;
+            const frameDuration = replayDurationMs / 1000;
+            const normalizedProgress = Math.min(targetTime / Math.max(frameDuration, 0.001), 0.999999);
+            const frameIndex = normalizedProgress * (activeReplay.frames.length - 1);
+            const lowerIndex = Math.floor(frameIndex);
+            const upperIndex = Math.min(lowerIndex + 1, activeReplay.frames.length - 1);
+            const blend = frameIndex - lowerIndex;
+            const lowerFrame = activeReplay.frames[lowerIndex];
+            const upperFrame = activeReplay.frames[upperIndex];
+            const nextQpos = lowerFrame.qpos.map((value, jointIndex) => value + (upperFrame.qpos[jointIndex] - value) * blend);
+
+            nextQpos.forEach((value, jointIndex) => {
+              data.qpos[jointIndex] = value;
+            });
+            moduleRef.current.mj_forward(modelRef.current, data);
+
+            const now = performance.now();
+            if (now - jointStateUpdateRef.current >= 80) {
+              jointStateUpdateRef.current = now;
+              setJointPositions([...nextQpos]);
+            }
+          }
+
           for (let bodyIndex = 0; bodyIndex < bodies.length; bodyIndex += 1) {
             const body = bodies[bodyIndex];
             body.position.set(data.xpos[bodyIndex * 3], data.xpos[bodyIndex * 3 + 1], data.xpos[bodyIndex * 3 + 2]);
@@ -368,7 +437,7 @@ export function SimulationView() {
           animationFrame = window.requestAnimationFrame(step);
         };
 
-        setStatusText('ER15 默认机器人已载入');
+        setStatusText(`${robotDefinition.modelName} 默认机器人已载入`);
         setLoadState('ready');
         step();
 
@@ -381,7 +450,7 @@ export function SimulationView() {
         console.error('SimulationView init error', error);
         setLoadState('error');
         setErrorText(message);
-        setStatusText('ER15 初始化失败');
+        setStatusText(`${robotDefinition.modelName} 初始化失败`);
       }
     }
 
@@ -396,13 +465,16 @@ export function SimulationView() {
       renderer?.domElement.remove();
       data?.delete?.();
       model?.delete?.();
+      dataRef.current = null;
+      modelRef.current = null;
+      moduleRef.current = null;
       try {
         moduleInstance?.FS?.unmount('/working');
       } catch {
         // Ignore teardown races.
       }
     };
-  }, []);
+  }, [robotDefinition.modelName, robotDefinition.sceneFile, robotDefinition.showcaseQpos]);
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#ffffff]">
@@ -423,7 +495,7 @@ export function SimulationView() {
         <div className="bg-[#f3f3f3] border border-[#e5e5e5] p-2 w-44">
           <p className="text-[9px] font-bold text-[#6f6f6f] uppercase tracking-wider mb-1.5">关节状态 (Joint States)</p>
           <div className="space-y-1">
-            {SHOWCASE_QPOS.map((value, index) => {
+            {jointPositions.map((value, index) => {
               const progress = `${Math.min(100, Math.round((Math.abs(value) / Math.PI) * 100))}%`;
               return (
                 <div key={`joint-${index + 1}`} className="flex items-center gap-2">
@@ -442,7 +514,7 @@ export function SimulationView() {
       <div className="absolute bottom-4 left-4 z-10 flex gap-2">
         <div className="bg-[#f3f3f3] border border-[#e5e5e5] px-2 py-1">
           <span className="text-[9px] font-bold text-[#6f6f6f] uppercase tracking-wider mr-2">模型 (MODEL)</span>
-          <span className="text-xs font-mono text-[#333333]">ER15-1400</span>
+          <span className="text-xs font-mono text-[#333333]">{robotDefinition.modelName}</span>
         </div>
         <div className="bg-[#f3f3f3] border border-[#e5e5e5] px-2 py-1">
           <span className="text-[9px] font-bold text-[#6f6f6f] uppercase tracking-wider mr-2">步长 (STEP)</span>

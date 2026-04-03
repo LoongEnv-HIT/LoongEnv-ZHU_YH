@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "defaultModuleId": "perfopt",
+  "modules": [
+    {
+      "id": "perfopt",
+      "enabled": true,
+      "manifest": "backend/algorithm_library/modules/perfopt/module.json"
+    }
+  ]
+}
+

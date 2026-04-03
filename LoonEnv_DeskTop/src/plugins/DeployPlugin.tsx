@@ -20,6 +20,7 @@ export const DeployPlugin: Plugin = {
   outputSchema: { jitter: '15us', status: 'RUNNING' },
   component: ({ data, onAction }) => {
     const [activeStep, setActiveStep] = useState(1);
+    const deployConfig = data.projectConfig?.deploy;
     const steps = [
       { id: 1, label: '硬件连接 (Hardware)', icon: <Link className="w-3.5 h-3.5" /> },
       { id: 2, label: '部署配置 (Deployment)', icon: <Download className="w-3.5 h-3.5" /> },
@@ -57,27 +58,27 @@ export const DeployPlugin: Plugin = {
                     <Cpu className="w-6 h-6 text-[#007acc]" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-bold text-[#333333]">Jetson Orin AGX</p>
-                    <p className="text-[10px] text-[#6f6f6f]">IP: 192.168.1.105 | SSH 已就绪</p>
+                    <p className="text-[11px] font-bold text-[#333333]">{deployConfig?.hardwareTarget ?? 'Jetson Orin AGX'}</p>
+                    <p className="text-[10px] text-[#6f6f6f]">IP: {deployConfig?.targetHost ?? '192.168.1.105'} | SSH 已就绪</p>
                   </div>
+                </div>
+                <div className="mt-3 grid grid-cols-1 gap-2">
+                  <input
+                    value={deployConfig?.hardwareTarget ?? ''}
+                    onChange={(event) => onAction('DEPLOY_CONFIG_UPDATED', { hardwareTarget: event.target.value })}
+                    className="w-full rounded-sm border border-[#e5e5e5] px-3 py-2 text-[11px] outline-none"
+                    placeholder="硬件目标"
+                  />
+                  <input
+                    value={deployConfig?.targetHost ?? ''}
+                    onChange={(event) => onAction('DEPLOY_CONFIG_UPDATED', { targetHost: event.target.value })}
+                    className="w-full rounded-sm border border-[#e5e5e5] px-3 py-2 text-[11px] outline-none"
+                    placeholder="目标主机"
+                  />
                 </div>
                 <button className="w-full mt-3 py-2 bg-[#333333] text-white rounded-sm text-[10px] font-bold hover:bg-[#1e1e1e] transition-all uppercase tracking-widest shadow-sm active:scale-[0.98]">
                   建立 SSH 连接 (Establish SSH Connection)
                 </button>
-              </CollapsibleSection>
-              
-              <CollapsibleSection title="通信链路 (Communication Links)" defaultOpen={false}>
-                <div className="space-y-1 border border-[#e5e5e5] rounded-sm overflow-hidden shadow-sm divide-y divide-[#f3f3f3]">
-                  {['EtherCAT 总线', 'CAN-FD 接口', 'ROS2 桥接'].map((label) => (
-                    <div key={label} className="flex items-center justify-between px-3 py-2.5 bg-white hover:bg-[#f9f9f9] transition-colors group">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 bg-[#388a3c] rounded-full shadow-sm animate-pulse" />
-                        <span className="text-[11px] text-[#333333] font-medium">{label}</span>
-                      </div>
-                      <span className="text-[9px] font-bold text-[#388a3c] uppercase tracking-wider opacity-60 group-hover:opacity-100 transition-opacity">已连接 (Connected)</span>
-                    </div>
-                  ))}
-                </div>
               </CollapsibleSection>
             </motion.div>
           )}
@@ -111,6 +112,13 @@ export const DeployPlugin: Plugin = {
                       <span>同步 (Sync): 100%</span>
                     </div>
                   </div>
+                  <input
+                    type="number"
+                    value={deployConfig?.controlFrequencyHz ?? 1000}
+                    onChange={(event) => onAction('DEPLOY_CONFIG_UPDATED', { controlFrequencyHz: Number(event.target.value) })}
+                    className="w-full max-w-[260px] rounded-sm border border-[#e5e5e5] px-3 py-2 text-[11px] outline-none"
+                    placeholder="控制频率 Hz"
+                  />
                 </div>
               </CollapsibleSection>
             </motion.div>
@@ -134,26 +142,14 @@ export const DeployPlugin: Plugin = {
                   </button>
                 </div>
               </CollapsibleSection>
-              
-              <CollapsibleSection title="控制流 (Control Stream)" defaultOpen>
-                <div className="bg-white border border-[#e5e5e5] rounded-sm overflow-hidden shadow-sm divide-y divide-[#f3f3f3]">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="flex justify-between items-center text-[10px] font-mono py-2.5 hover:bg-[#f9f9f9] px-3 transition-colors">
-                      <span className="text-[#6f6f6f]">J{i}_目标 (TARGET)</span>
-                      <span className="text-[#007acc] font-bold">{(Math.random() * 3.14).toFixed(4)}</span>
-                    </div>
-                  ))}
-                </div>
-              </CollapsibleSection>
-              
-              <CollapsibleSection title="传感器反馈 (Sensor Feedback)" defaultOpen={false}>
-                <div className="bg-white border border-[#e5e5e5] rounded-sm overflow-hidden shadow-sm divide-y divide-[#f3f3f3]">
-                  {[{ name: 'IMU_X', val: '0.02' }, { name: '温度 (TEMP)', val: '42.5°C' }].map(s => (
-                    <div key={s.name} className="flex justify-between items-center text-[10px] font-mono py-2.5 hover:bg-[#f9f9f9] px-3 transition-colors">
-                      <span className="text-[#6f6f6f]">{s.name}</span>
-                      <span className="text-[#388a3c] font-bold">{s.val}</span>
-                    </div>
-                  ))}
+
+              <CollapsibleSection title="运行摘要 (Run Summary)" defaultOpen>
+                <div className="rounded-sm border border-[#e5e5e5] bg-white px-3 py-3 text-[11px] text-[#526070] space-y-1.5">
+                  <div><span className="font-bold text-[#333333]">控制内核:</span> C++ RT</div>
+                  <div><span className="font-bold text-[#333333]">部署状态:</span> 已激活</div>
+                  <div><span className="font-bold text-[#333333]">运行频率:</span> 1000 Hz</div>
+                  <div><span className="font-bold text-[#333333]">目标主机:</span> {deployConfig?.targetHost ?? '192.168.1.105'}</div>
+                  <div><span className="font-bold text-[#333333]">当前目标:</span> 维持稳定控制并支持紧急停止</div>
                 </div>
               </CollapsibleSection>
             </motion.div>

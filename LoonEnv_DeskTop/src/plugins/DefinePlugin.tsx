@@ -1,39 +1,73 @@
-import React, { useState } from 'react';
-import { Box, Settings, Layout, Upload, Plus, X, Play } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Box, Settings, Layout, Upload, Play } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Plugin } from '../types';
 import { cn } from '../lib/utils';
 import { CollapsibleSection } from '../components/CollapsibleSection';
-
-const ER15_JOINT_LIMITS = [
-  { joint: 'J1', position: '-2.967 ~ 2.967 rad', velocity: '未提供', torque: '未提供' },
-  { joint: 'J2', position: '-2.7925 ~ 1.5708 rad', velocity: '未提供', torque: '未提供' },
-  { joint: 'J3', position: '-1.4835 ~ 3.0543 rad', velocity: '未提供', torque: '未提供' },
-  { joint: 'J4', position: '-3.316 ~ 3.316 rad', velocity: '未提供', torque: '未提供' },
-  { joint: 'J5', position: '-2.2689 ~ 2.2689 rad', velocity: '未提供', torque: '未提供' },
-  { joint: 'J6', position: '-6.2832 ~ 6.2832 rad', velocity: '未提供', torque: '未提供' },
-] as const;
+import {
+  AVAILABLE_ROBOT_MODELS,
+  ER15_EMBEDDED_ASSETS_LABEL,
+  ER15_INPUT_SCHEMA,
+  ER15_JOINT_CONFIGURATION,
+  ER15_JOINT_LIMITS,
+  ER15_MODEL_BOUNDARY,
+  ER15_MODEL_NAME,
+  ER15_OUTPUT_SCHEMA,
+  ER15_RESOURCE_PATH,
+  ER15_SHOWCASE_QPOS,
+  ER15_TECH_STACK,
+  createDefineArtifactFromRobotModel,
+  getRobotAssetDefinition,
+} from '../data/er15';
 
 export const DefinePlugin: Plugin = {
   metadata: {
     id: 'define',
     name: '机器人定义模块',
-    description: '加载并配置 ER15-1400 工业机器人模型、关节约束与仿真场景初始条件。',
+    description: `加载并配置 ${ER15_MODEL_NAME} 工业机器人模型、关节约束与仿真场景初始条件。`,
     version: '1.1.0',
     author: 'LoongEnv Core'
   },
   icon: <Box className="w-5 h-5" />,
   stepTitle: '机器人定义与建模',
-  techStack: ['MuJoCo WASM', 'MJCF', 'STL Mesh'],
-  inputSchema: { robot: 'ER15-1400', source: 'MJCF + STL', format: 'XML/Binary Mesh' },
-  outputSchema: { model: 'ER15-1400', joints: 6, scene: 'MuJoCo Runtime State' },
+  techStack: [...ER15_TECH_STACK],
+  inputSchema: ER15_INPUT_SCHEMA,
+  outputSchema: ER15_OUTPUT_SCHEMA,
   component: ({ data, onAction }) => {
     const [activeStep, setActiveStep] = useState(1);
+    const [robotModel, setRobotModel] = useState(ER15_MODEL_NAME);
+    const [sourceType, setSourceType] = useState('内置模型资源 (Built-in Assets)');
+    const [sourcePath, setSourcePath] = useState(ER15_RESOURCE_PATH);
+    const [groundType, setGroundType] = useState('MuJoCo 蓝色棋盘反射地面');
+    const [lightingType, setLightingType] = useState('MuJoCo 样例双方向光');
     const steps = [
       { id: 1, label: '模型源 (Model Source)', icon: <Upload className="w-3.5 h-3.5" /> },
       { id: 2, label: '物理参数 (Physics)', icon: <Settings className="w-3.5 h-3.5" /> },
       { id: 3, label: '场景配置 (Scene)', icon: <Layout className="w-3.5 h-3.5" /> },
     ];
+
+    const robotDefinition = getRobotAssetDefinition(robotModel);
+
+    useEffect(() => {
+      const config = data.projectConfig?.define;
+      if (!config) {
+        return;
+      }
+      setRobotModel(config.robotModel);
+      setSourceType(config.sourceType);
+      setSourcePath(config.sourcePath);
+      setGroundType(config.ground);
+      setLightingType(config.lighting);
+    }, [data.projectConfig?.define]);
+
+    const emitDefineArtifact = () => {
+      onAction('DEFINE_ARTIFACT_UPDATED', createDefineArtifactFromRobotModel(robotModel, {
+        sourceType,
+        sourcePath,
+        ground: groundType,
+        lighting: lightingType,
+      }));
+    };
 
     return (
       <div className="flex flex-col h-full bg-white text-[#333333] select-none">
@@ -63,15 +97,30 @@ export const DefinePlugin: Plugin = {
                   <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
                     <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">机器人型号</span>
                     <div className="w-2/3">
-                      <select className="w-full bg-transparent text-[11px] outline-none cursor-pointer text-[#333333] font-medium">
-                        <option>ER15-1400</option>
+                      <select
+                        value={robotModel}
+                        onChange={(event) => {
+                          const nextRobotModel = event.target.value;
+                          setRobotModel(nextRobotModel);
+                          const nextDefinition = getRobotAssetDefinition(nextRobotModel);
+                          setSourcePath(nextDefinition.resourcePath);
+                        }}
+                        className="w-full bg-transparent text-[11px] outline-none cursor-pointer text-[#333333] font-medium"
+                      >
+                        {AVAILABLE_ROBOT_MODELS.map((name) => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
                   <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
                     <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">来源类型</span>
                     <div className="w-2/3">
-                      <select className="w-full bg-transparent text-[11px] outline-none cursor-pointer text-[#333333] font-medium">
+                      <select
+                        value={sourceType}
+                        onChange={(event) => setSourceType(event.target.value)}
+                        className="w-full bg-transparent text-[11px] outline-none cursor-pointer text-[#333333] font-medium"
+                      >
                         <option>内置模型资源 (Built-in Assets)</option>
                         <option>本地文件 (.xml, .urdf)</option>
                         <option>云端仓库</option>
@@ -83,7 +132,8 @@ export const DefinePlugin: Plugin = {
                     <div className="w-2/3 flex gap-2">
                       <input 
                         type="text" 
-                        defaultValue="/robots/er15/er15-1400.mjcf.xml"
+                        value={sourcePath}
+                        onChange={(event) => setSourcePath(event.target.value)}
                         className="flex-1 bg-transparent text-[11px] outline-none text-[#333333] font-mono"
                       />
                       <button className="text-[10px] text-[#007acc] hover:underline font-bold uppercase tracking-wider">定位 (Open)</button>
@@ -91,28 +141,22 @@ export const DefinePlugin: Plugin = {
                   </div>
                   <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
                     <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">关节配置</span>
-                    <span className="w-2/3 text-[11px] text-[#333333] font-medium">6 自由度转动关节 (Revolute, Z Axis)</span>
+                    <span className="w-2/3 text-[11px] text-[#333333] font-medium">{robotDefinition.jointConfiguration}</span>
                   </div>
                   <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
                     <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">模型边界</span>
-                    <span className="w-2/3 text-[11px] text-[#333333] font-medium">统计范围 extent = 2.2, center = [0, 0, 0.8]</span>
+                    <span className="w-2/3 text-[11px] text-[#333333] font-medium">{robotDefinition.modelBoundary}</span>
                   </div>
                 </div>
               </CollapsibleSection>
               
-              <CollapsibleSection title="资产管理 (Asset Management)" defaultOpen={false}>
-                <div className="grid grid-cols-2 gap-3">
-                  <button className="flex flex-col items-center justify-center gap-2 p-4 border border-[#e5e5e5] hover:border-[#007acc] hover:bg-[#f0f7ff] transition-all group rounded-sm shadow-sm">
-                    <Upload className="w-5 h-5 text-[#6f6f6f] group-hover:text-[#007acc]" />
-                    <span className="text-[10px] font-bold text-[#6f6f6f] group-hover:text-[#333333] uppercase tracking-wider">上传替代 MJCF</span>
-                  </button>
-                  <button className="flex flex-col items-center justify-center gap-2 p-4 border border-[#e5e5e5] hover:border-[#007acc] hover:bg-[#f0f7ff] transition-all group rounded-sm shadow-sm">
-                    <Box className="w-5 h-5 text-[#6f6f6f] group-hover:text-[#007acc]" />
-                    <span className="text-[10px] font-bold text-[#6f6f6f] group-hover:text-[#333333] uppercase tracking-wider">7 个 STL 资源</span>
-                  </button>
-                </div>
-                <div className="mt-3 rounded-sm border border-[#e5e5e5] bg-[#f8fafc] px-3 py-2 text-[11px] text-[#526070]">
-                  当前内置资源: <span className="font-mono text-[#333333]">b_link.STL, l_1 ~ l_6.STL</span>
+              <CollapsibleSection title="定义工件 (Define Artifact)" defaultOpen>
+                <div className="rounded-sm border border-[#e5e5e5] bg-[#f8fafc] px-3 py-3 text-[11px] text-[#526070] space-y-1.5">
+                  <div><span className="font-bold text-[#333333]">模型:</span> {robotModel}</div>
+                  <div><span className="font-bold text-[#333333]">来源:</span> {sourceType}</div>
+                  <div><span className="font-bold text-[#333333]">路径:</span> <span className="font-mono">{sourcePath}</span></div>
+                  <div><span className="font-bold text-[#333333]">资产:</span> {robotDefinition.embeddedAssetsLabel}</div>
+                  <div><span className="font-bold text-[#333333]">输出目的:</span> 为 Design 阶段提供可复用的机器人定义工件</div>
                 </div>
               </CollapsibleSection>
             </motion.div>
@@ -149,7 +193,7 @@ export const DefinePlugin: Plugin = {
                     <span>速度限制</span>
                     <span>力矩限制</span>
                   </div>
-                  {ER15_JOINT_LIMITS.map((limit) => (
+                  {robotDefinition.jointLimits.map((limit) => (
                     <div
                       key={limit.joint}
                       className="grid grid-cols-[72px_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-[#f1f5f9] px-3 py-2.5 text-[11px] last:border-b-0 hover:bg-[#f9fbfd]"
@@ -166,20 +210,6 @@ export const DefinePlugin: Plugin = {
                 </p>
               </CollapsibleSection>
 
-              <CollapsibleSection title="材料属性 (Material Properties)" defaultOpen={false}>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3 px-3 py-2.5 bg-white border border-[#e5e5e5] rounded-sm hover:border-[#007acc] cursor-pointer transition-all group shadow-sm">
-                    <div className="w-3.5 h-3.5 bg-[#ff7a05] rounded-sm shadow-sm" />
-                    <span className="text-[11px] text-[#333333] flex-1 font-medium">KUKA 橙色连杆 (kuka_orange)</span>
-                    <Settings className="w-3.5 h-3.5 text-[#6f6f6f] opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  <div className="flex items-center gap-3 px-3 py-2.5 bg-white border border-[#e5e5e5] rounded-sm hover:border-[#007acc] cursor-pointer transition-all group shadow-sm">
-                    <div className="w-3.5 h-3.5 bg-[#34393d] rounded-sm shadow-sm" />
-                    <span className="text-[11px] text-[#333333] flex-1 font-medium">石墨底座 / 炭灰腕部 / 钢制法兰</span>
-                    <Settings className="w-3.5 h-3.5 text-[#6f6f6f] opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </div>
-              </CollapsibleSection>
             </motion.div>
           )}
 
@@ -190,7 +220,11 @@ export const DefinePlugin: Plugin = {
                   <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
                     <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">地面类型</span>
                     <div className="w-2/3">
-                      <select className="w-full bg-transparent text-[11px] outline-none cursor-pointer text-[#333333] font-medium">
+                      <select
+                        value={groundType}
+                        onChange={(event) => setGroundType(event.target.value)}
+                        className="w-full bg-transparent text-[11px] outline-none cursor-pointer text-[#333333] font-medium"
+                      >
                         <option>MuJoCo 蓝色棋盘反射地面</option>
                         <option>无限网格</option>
                         <option>实验室地面</option>
@@ -200,7 +234,11 @@ export const DefinePlugin: Plugin = {
                   <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
                     <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">光照配置</span>
                     <div className="w-2/3">
-                      <select className="w-full bg-transparent text-[11px] outline-none cursor-pointer text-[#333333] font-medium">
+                      <select
+                        value={lightingType}
+                        onChange={(event) => setLightingType(event.target.value)}
+                        className="w-full bg-transparent text-[11px] outline-none cursor-pointer text-[#333333] font-medium"
+                      >
                         <option>MuJoCo 样例双方向光</option>
                         <option>摄影棚 (默认)</option>
                         <option>高对比度</option>
@@ -209,28 +247,17 @@ export const DefinePlugin: Plugin = {
                   </div>
                   <div className="flex items-center py-2.5 px-3 hover:bg-[#f9f9f9] transition-colors group">
                     <span className="w-1/3 text-[11px] text-[#6f6f6f] group-hover:text-[#333333]">展示姿态</span>
-                    <span className="w-2/3 text-[11px] text-[#333333] font-medium">ER15 Showcase QPos 已预置</span>
+                    <span className="w-2/3 text-[11px] text-[#333333] font-medium">{robotDefinition.modelName} Showcase QPos 已预置: [{robotDefinition.showcaseQpos.join(', ')}]</span>
                   </div>
                 </div>
               </CollapsibleSection>
 
-              <CollapsibleSection title="场景对象 (Scene Objects)" defaultOpen>
-                <div className="border border-[#e5e5e5] rounded-sm divide-y divide-[#f3f3f3] shadow-sm overflow-hidden">
-                  {['MuJoCo Floor Plane', 'Key Directional Light', 'Fill Directional Light', 'Orbit Camera Rig'].map(obj => (
-                    <div key={obj} className="flex items-center justify-between px-3 py-2.5 hover:bg-[#f9f9f9] cursor-pointer group transition-colors">
-                      <div className="flex items-center gap-3">
-                        <Box className="w-3.5 h-3.5 text-blue-500" />
-                        <span className="text-[11px] text-[#333333] font-medium">{obj}</span>
-                      </div>
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Settings className="w-3 h-3 text-[#6f6f6f] hover:text-[#333333]" />
-                        <X className="w-3 h-3 text-[#6f6f6f] hover:text-red-500" />
-                      </div>
-                    </div>
-                  ))}
-                  <button className="w-full py-2.5 text-[10px] text-[#007acc] hover:bg-[#f0f7ff] flex items-center justify-center gap-2 font-bold uppercase tracking-wider transition-colors">
-                    <Plus className="w-3.5 h-3.5" /> 添加场景资源 (Add Asset)
-                  </button>
+              <CollapsibleSection title="场景摘要 (Scene Summary)" defaultOpen>
+                <div className="rounded-sm border border-[#e5e5e5] bg-[#f8fafc] px-3 py-3 text-[11px] text-[#526070] space-y-1.5">
+                  <div><span className="font-bold text-[#333333]">地面:</span> {groundType}</div>
+                  <div><span className="font-bold text-[#333333]">光照:</span> {lightingType}</div>
+                  <div><span className="font-bold text-[#333333]">展示姿态:</span> ER15 Showcase QPos 已预置</div>
+                  <div><span className="font-bold text-[#333333]">场景用途:</span> 为算法测试运行和后续优化提供统一仿真场景。</div>
                 </div>
               </CollapsibleSection>
             </motion.div>
@@ -240,7 +267,10 @@ export const DefinePlugin: Plugin = {
         {/* Action Bar */}
         <div className="p-4 border-t border-[#e5e5e5] bg-[#f3f3f3] shrink-0">
           <button 
-            onClick={() => onAction('COMPLETE', 'DEFINE_FINISHED')}
+            onClick={() => {
+              emitDefineArtifact();
+              onAction('COMPLETE', 'DEFINE_FINISHED');
+            }}
             className="w-full bg-[#007acc] hover:bg-[#0062a3] text-white py-2 text-[11px] font-bold uppercase tracking-widest shadow-sm transition-all flex items-center justify-center gap-2 active:scale-[0.98] rounded-sm"
           >
             <Play className="w-3.5 h-3.5 fill-current" /> 初始化仿真 (Initialize Simulation)

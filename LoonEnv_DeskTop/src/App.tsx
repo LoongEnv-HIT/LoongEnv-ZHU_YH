@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   Activity, 
   Cpu, 
@@ -44,7 +44,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 
 // --- Types ---
-import { Plugin } from './types';
+import { DefineArtifact, DesignAlgorithmModule, DesignJob, Plugin, PluginData, ProjectConfig, RuntimeLogEntry } from './types';
 
 // --- Plugins ---
 import { DefinePlugin } from './plugins/DefinePlugin';
@@ -55,6 +55,10 @@ import { DiagnosePlugin } from './plugins/DiagnosePlugin';
 // --- New Components ---
 import { SimulationView } from './components/SimulationView';
 import { SystemMonitor } from './components/SystemMonitor';
+import { createDefaultEr15DefineArtifact } from './data/er15';
+import type { Er15Replay } from './data/er15Replay';
+import { buildDefineArtifact, DEFAULT_PROJECT_CONFIG } from './data/projectConfig';
+import { createDesignApi } from './services/designApi';
 
 // --- Utility ---
 
@@ -110,9 +114,10 @@ const SchemaCard: React.FC<SchemaCardProps> = ({ title, data }) => {
 const SIDEBAR_DEFAULT_WIDTH = 560;
 const SIDEBAR_MIN_WIDTH = 380;
 const SIDEBAR_MAX_WIDTH = 560;
-const BOTTOM_PANEL_DEFAULT_HEIGHT = 220;
-const BOTTOM_PANEL_MIN_HEIGHT = 160;
-const BOTTOM_PANEL_MAX_HEIGHT = 360;
+const BOTTOM_PANEL_DEFAULT_HEIGHT = 160;
+const BOTTOM_PANEL_MIN_HEIGHT = 120;
+const BOTTOM_PANEL_MAX_HEIGHT = 280;
+const VS_CODE_MENUS = ['文件', '编辑', '选择', '视图', '转到', '运行', '终端', '帮助'] as const;
 
 type DragState =
   | { type: 'sidebar'; startPos: number; startValue: number }
@@ -124,6 +129,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export default function App() {
+  const [projectConfig, setProjectConfig] = useState<ProjectConfig>(DEFAULT_PROJECT_CONFIG);
   const [activeModuleId, setActiveModuleId] = useState('define');
   const [showCore, setShowCore] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
@@ -131,8 +137,54 @@ export default function App() {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(BOTTOM_PANEL_DEFAULT_HEIGHT);
   const [dragState, setDragState] = useState<DragState>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [defineArtifact, setDefineArtifact] = useState<DefineArtifact>(createDefaultEr15DefineArtifact);
+  const [designJob, setDesignJob] = useState<DesignJob>();
+  const [algorithmModules, setAlgorithmModules] = useState<readonly DesignAlgorithmModule[]>([]);
+  const [selectedAlgorithmModuleId, setSelectedAlgorithmModuleId] = useState<string>();
+  const [selectedAlgorithmCategoryId, setSelectedAlgorithmCategoryId] = useState<string>();
+  const [selectedAlgorithmId, setSelectedAlgorithmId] = useState<string>();
+  const [simulationReplay, setSimulationReplay] = useState<Er15Replay>();
+  const replayedJobIdsRef = useRef<Set<string>>(new Set());
+  const [runtimeLogs, setRuntimeLogs] = useState<RuntimeLogEntry[]>([
+    { id: 'log-boot-1', timestamp: '09:42:15', level: 'INFO', message: 'MuJoCo WASM 引擎初始化成功。' },
+    { id: 'log-boot-2', timestamp: '09:42:16', level: 'INFO', message: 'Design 模块已加载，等待 Define 工件输入。' },
+  ]);
+  const appendRuntimeLog = (level: RuntimeLogEntry['level'], message: string) => {
+    const now = new Date();
+    const timestamp = now.toTimeString().slice(0, 8);
+    setRuntimeLogs((current) => [
+      ...current.slice(-79),
+      { id: `log-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`, timestamp, level, message },
+    ]);
+  };
+  const [designApi] = useState(() => createDesignApi((level, message) => appendRuntimeLog(level, message)));
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const activePlugin = PLUGIN_REGISTRY.find(p => p.metadata.id === activeModuleId) || PLUGIN_REGISTRY[0];
+  const selectedAlgorithmModule = algorithmModules.find((module) => module.id === selectedAlgorithmModuleId) ?? algorithmModules[0];
+  const availableCategories = selectedAlgorithmModule
+    ? Array.from(
+        new Map(
+          selectedAlgorithmModule.algorithms.map((algorithm) => [
+            algorithm.categoryId,
+            { id: algorithm.categoryId, label: algorithm.categoryLabel },
+          ]),
+        ).values(),
+      )
+    : [];
+  const effectiveCategoryId = selectedAlgorithmCategoryId ?? availableCategories[0]?.id;
+  const categoryAlgorithms = selectedAlgorithmModule?.algorithms.filter((algorithm) => algorithm.categoryId === effectiveCategoryId) ?? [];
+  const selectedDesignAlgorithm = categoryAlgorithms.find((algorithm) => algorithm.id === selectedAlgorithmId) ?? categoryAlgorithms[0];
+  const pluginData: PluginData = {
+    defineArtifact,
+    designJob,
+    projectConfig,
+    availableDesignModules: algorithmModules,
+    selectedDesignModule: selectedAlgorithmModule,
+    selectedDesignAlgorithm,
+  };
 
   useEffect(() => {
     if (!dragState) {
@@ -168,8 +220,257 @@ export default function App() {
     };
   }, [dragState]);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    handleFullscreenChange();
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    void designApi.fetchAlgorithmCatalog(defineArtifact.robotModel).then((modules) => {
+      setAlgorithmModules(modules);
+      const nextModule = modules.find((module) => module.id === selectedAlgorithmModuleId) ?? modules[0];
+      if (!nextModule) {
+        setSelectedAlgorithmModuleId(undefined);
+        setSelectedAlgorithmCategoryId(undefined);
+        setSelectedAlgorithmId(undefined);
+        appendRuntimeLog('WARN', `当前机器人 ${defineArtifact.robotModel} 暂无可用算法，请先更换机器人或扩展算法库支持。`);
+        return;
+      }
+      setSelectedAlgorithmModuleId(nextModule.id);
+      const nextCategory = nextModule.algorithms.find((algorithm) => algorithm.categoryId === selectedAlgorithmCategoryId)?.categoryId
+        ?? nextModule.algorithms[0]?.categoryId;
+      setSelectedAlgorithmCategoryId(nextCategory);
+      const nextAlgorithm = nextModule.algorithms.find((algorithm) => algorithm.id === selectedAlgorithmId && algorithm.categoryId === nextCategory)
+        ?? nextModule.algorithms.find((algorithm) => algorithm.categoryId === nextCategory);
+      setSelectedAlgorithmId(nextAlgorithm?.id);
+      if (selectedAlgorithmId && nextAlgorithm?.id !== selectedAlgorithmId) {
+        appendRuntimeLog('WARN', `机器人已切换为 ${defineArtifact.robotModel}，先前算法不兼容，已自动切换为 ${nextAlgorithm?.name ?? '未选择'}`);
+        setActiveModuleId('design');
+      }
+    }).catch((error) => {
+      appendRuntimeLog('WARN', `后端算法目录读取失败: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }, [designApi, defineArtifact.robotModel, selectedAlgorithmCategoryId, selectedAlgorithmId, selectedAlgorithmModuleId]);
+
+  useEffect(() => {
+    setProjectConfig((current) => ({
+      ...current,
+      define: {
+        robotModel: defineArtifact.robotModel,
+        sourceType: defineArtifact.sourceType,
+        sourcePath: defineArtifact.sourcePath,
+        ground: defineArtifact.environment.ground,
+        lighting: defineArtifact.environment.lighting,
+      },
+      design: {
+        algorithmModuleId: selectedAlgorithmModule?.id,
+        algorithmCategoryId: effectiveCategoryId,
+        algorithmId: selectedDesignAlgorithm?.id,
+      },
+      ui: {
+        activeModuleId,
+        sidebarVisible: isSideBarVisible,
+        sidebarWidth,
+        bottomPanelHeight,
+      },
+    }));
+  }, [
+    activeModuleId,
+    bottomPanelHeight,
+    defineArtifact,
+    effectiveCategoryId,
+    isSideBarVisible,
+    selectedAlgorithmModule?.id,
+    selectedDesignAlgorithm?.id,
+    sidebarWidth,
+  ]);
+
+  const applyProjectConfig = (nextConfig: ProjectConfig) => {
+    setProjectConfig(nextConfig);
+    setActiveModuleId(nextConfig.ui.activeModuleId);
+    setIsSideBarVisible(nextConfig.ui.sidebarVisible);
+    setSidebarWidth(nextConfig.ui.sidebarWidth);
+    setBottomPanelHeight(nextConfig.ui.bottomPanelHeight);
+    setDefineArtifact(buildDefineArtifact(nextConfig.define));
+    setSelectedAlgorithmModuleId(nextConfig.design.algorithmModuleId);
+    setSelectedAlgorithmCategoryId(nextConfig.design.algorithmCategoryId);
+    setSelectedAlgorithmId(nextConfig.design.algorithmId);
+    setDesignJob(undefined);
+    setSimulationReplay(undefined);
+  };
+
+  const handleNewProject = () => {
+    applyProjectConfig(DEFAULT_PROJECT_CONFIG);
+    appendRuntimeLog('INFO', '已新建项目配置。');
+    setOpenMenu(null);
+  };
+
+  const handleExportProjectConfig = () => {
+    const blob = new Blob([JSON.stringify(projectConfig, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'loonenv-project-config.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    appendRuntimeLog('INFO', '项目配置已导出。');
+    setOpenMenu(null);
+  };
+
+  const handleImportProjectConfig = async (file: File) => {
+    try {
+      const raw = await file.text();
+      const parsed = JSON.parse(raw) as ProjectConfig;
+      applyProjectConfig(parsed);
+      appendRuntimeLog('INFO', `项目配置已导入: ${file.name}`);
+    } catch (error) {
+      appendRuntimeLog('ERROR', `配置导入失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      if (importInputRef.current) {
+        importInputRef.current.value = '';
+      }
+      setOpenMenu(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!designJob || designJob.state !== 'optimizing') {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void designApi.pollDesignJob(designJob).then((nextJob) => {
+        setDesignJob(nextJob);
+      }).catch((error) => {
+        setDesignJob((current) => current ? {
+          ...current,
+          state: 'error',
+          currentStage: 'Validation',
+          error: error instanceof Error ? error.message : String(error),
+        } : current);
+      });
+    }, 1500);
+
+    return () => window.clearInterval(timer);
+  }, [designApi, designJob]);
+
+  useEffect(() => {
+    if (!designJob || designJob.state !== 'validated') {
+      return;
+    }
+
+    if (replayedJobIdsRef.current.has(designJob.id)) {
+      return;
+    }
+
+    replayedJobIdsRef.current.add(designJob.id);
+    void designApi.fetchDesignReplay(designJob).then((replay) => {
+      if (!replay) {
+        appendRuntimeLog(
+          'WARN',
+          `PerfOpt optimize job ${designJob.backendJobId ?? designJob.id} 已完成，但后端未提供可回放轨迹；前端不会伪造机器人动作。`,
+        );
+        return;
+      }
+
+      setSimulationReplay(replay);
+      appendRuntimeLog(
+        'INFO',
+        `PerfOpt optimize job ${designJob.backendJobId ?? designJob.id} 已完成，开始显示后端回放 (${(replay.durationMs / 1000).toFixed(2)} s)。`,
+      );
+    }).catch((error) => {
+      appendRuntimeLog(
+        'WARN',
+        `PerfOpt optimize job ${designJob.backendJobId ?? designJob.id} 回放读取失败: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+  }, [designApi, designJob]);
+
   return (
     <div className="h-screen bg-[#ffffff] text-[#333333] font-sans selection:bg-[#add6ff] flex flex-col overflow-hidden select-none">
+      <header className="shrink-0 h-10 border-b border-[#1f1f1f] bg-[#181818] text-[#cccccc]">
+        <div className="h-full grid grid-cols-[1fr_auto_1fr] items-center px-2">
+          <div className="flex items-center gap-0.5 min-w-0">
+            <div className="w-3 h-3 rounded-full bg-[#007acc] mx-1 shrink-0" />
+            {VS_CODE_MENUS.map((item) => (
+              <div key={item} className="relative shrink-0">
+                <button
+                  onClick={() => setOpenMenu((current) => current === item ? null : item)}
+                  className="px-2.5 h-7 rounded-sm text-[11px] text-[#cccccc] hover:bg-white/10 hover:text-white transition-colors shrink-0"
+                >
+                  {item}
+                </button>
+                {item === '文件' && openMenu === item && (
+                  <div className="absolute top-8 left-0 z-[120] min-w-[180px] rounded-sm border border-[#2f2f2f] bg-[#252526] py-1 shadow-xl">
+                    <button onClick={handleNewProject} className="w-full px-3 py-1.5 text-left text-[11px] text-[#cccccc] hover:bg-[#094771]">
+                      新建项目
+                    </button>
+                    <button onClick={() => importInputRef.current?.click()} className="w-full px-3 py-1.5 text-left text-[11px] text-[#cccccc] hover:bg-[#094771]">
+                      导入配置...
+                    </button>
+                    <button onClick={handleExportProjectConfig} className="w-full px-3 py-1.5 text-left text-[11px] text-[#cccccc] hover:bg-[#094771]">
+                      导出配置...
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  void handleImportProjectConfig(file);
+                }
+              }}
+            />
+          </div>
+          <div className="flex items-center justify-center gap-2 min-w-0 px-4">
+            <span className="text-[11px] font-medium tracking-wide text-[#f3f3f3] shrink-0">LoonEnv</span>
+            <span className="text-[11px] text-[#8f8f8f] truncate">
+              {selectedDesignAlgorithm?.name ?? activePlugin.metadata.name} · 工业机器人算法设计工作台
+            </span>
+          </div>
+          <div className="flex items-center justify-end gap-1">
+            <button className="w-8 h-7 flex items-center justify-center rounded-sm text-[#c5c5c5] hover:bg-white/10 transition-colors" title="最小化">
+              <div className="w-3 h-px bg-current" />
+            </button>
+            <button
+              onClick={() => {
+                if (document.fullscreenElement) {
+                  void document.exitFullscreen().catch(() => {});
+                  return;
+                }
+                void document.documentElement.requestFullscreen().catch(() => {});
+              }}
+              className="w-8 h-7 flex items-center justify-center rounded-sm text-[#c5c5c5] hover:bg-white/10 transition-colors"
+              title={isFullscreen ? '退出全屏' : '全屏显示'}
+            >
+              {isFullscreen ? (
+                <div className="w-3 h-3 border border-current relative">
+                  <div className="absolute inset-[2px] border border-current bg-[#181818]" />
+                </div>
+              ) : (
+                <div className="w-3 h-3 border border-current" />
+              )}
+            </button>
+            <button className="w-8 h-7 flex items-center justify-center rounded-sm text-[#c5c5c5] hover:bg-[#c42b1c] hover:text-white transition-colors" title="关闭">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </header>
       {/* Main Container */}
       <div className="flex-1 flex overflow-hidden">
         
@@ -246,17 +547,7 @@ export default function App() {
               <span className="text-[11px] text-[#6f6f6f] font-bold tracking-wider uppercase">
                 {showCore ? "资源管理器: 核心" : activePlugin.metadata.name}
               </span>
-              <div className="flex items-center gap-1">
-                <button className="p-1 hover:bg-[#e8e8e8] rounded text-[#6f6f6f] transition-colors" title="新建文件">
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-                <button className="p-1 hover:bg-[#e8e8e8] rounded text-[#6f6f6f] transition-colors" title="全部折叠">
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                <button className="p-1 hover:bg-[#e8e8e8] rounded text-[#6f6f6f] transition-colors">
-                  <MoreHorizontal className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <div className="w-4" />
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col bg-[#f3f3f3]">
@@ -280,54 +571,115 @@ export default function App() {
                 </div>
               ) : (
                 <div className="flex flex-col flex-1">
-                  {/* Plugin Info Section - Collapsible, Closed by default */}
-                  <details className="border-b border-[#e5e5e5] group/details">
-                    <summary className="h-6 px-1 flex items-center gap-1 bg-[#e8e8e8] cursor-pointer list-none hover:bg-[#d8d8d8] transition-colors">
-                      <ChevronRight className="w-4 h-4 transition-transform group-open/details:rotate-90" />
-                      <span className="text-[11px] font-bold text-[#333333] uppercase tracking-tighter">插件详情</span>
-                    </summary>
-                    <div className="p-5 bg-white space-y-5 shadow-inner">
-                      <div>
-                        <h2 className="text-sm font-bold text-[#333333] mb-2">{activePlugin.stepTitle}</h2>
-                        <p className="text-[11px] text-[#6f6f6f] leading-relaxed">
-                          {activePlugin.metadata.description}
-                        </p>
-                      </div>
-                      
-                      <div>
-                        <span className="text-[10px] font-bold text-[#6f6f6f] uppercase block mb-3 tracking-widest">技术栈 (Tech Stack)</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {activePlugin.techStack.map(t => <TechBadge key={t} name={t} />)}
-                        </div>
-                      </div>
-
-                      <div className="space-y-1 pt-2 border-t border-[#f3f3f3]">
-                        <SchemaCard title="输入架构 (Input Schema)" data={activePlugin.inputSchema} />
-                        <SchemaCard title="输出架构 (Output Schema)" data={activePlugin.outputSchema} />
-                      </div>
-                    </div>
-                  </details>
-
                   {/* Plugin Custom UI Section - Primary focus */}
                   <div className="flex-1 flex flex-col min-h-0">
-                    <div className="h-9 px-4 flex items-center justify-between bg-[#f3f3f3] border-b border-[#e5e5e5] shrink-0">
-                      <div className="flex items-center gap-2">
-                        <ChevronRight className="w-4 h-4 rotate-90 text-[#6f6f6f]" />
-                        <span className="text-[11px] font-bold text-[#333333] uppercase tracking-wider">操作面板</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button className="p-1 hover:bg-[#e8e8e8] rounded-sm transition-colors text-[#6f6f6f] hover:text-[#333333]">
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                        <button className="p-1 hover:bg-[#e8e8e8] rounded-sm transition-colors text-[#6f6f6f] hover:text-[#333333]">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
                     <div className="flex-1 overflow-y-auto bg-white custom-scrollbar">
                       <activePlugin.component 
-                        data={{}} 
-                        onAction={(a, p) => console.log('Plugin Action:', a, p)} 
+                        data={pluginData}
+                        onAction={(action, payload) => {
+                          if (action === 'SELECT_ALGORITHM_MODULE') {
+                            const nextModule = algorithmModules.find((module) => module.id === payload);
+                            setSelectedAlgorithmModuleId(nextModule?.id);
+                            const nextCategory = nextModule?.algorithms[0]?.categoryId;
+                            setSelectedAlgorithmCategoryId(nextCategory);
+                            const nextAlgorithm = nextModule?.algorithms.find((algorithm) => algorithm.categoryId === nextCategory);
+                            setSelectedAlgorithmId(nextAlgorithm?.id);
+                            return;
+                          }
+                          if (action === 'SELECT_ALGORITHM_CATEGORY') {
+                            const nextCategoryId = String(payload ?? '');
+                            setSelectedAlgorithmCategoryId(nextCategoryId);
+                            const nextAlgorithm = selectedAlgorithmModule?.algorithms.find((algorithm) => algorithm.categoryId === nextCategoryId);
+                            setSelectedAlgorithmId(nextAlgorithm?.id);
+                            return;
+                          }
+                          if (action === 'SELECT_ALGORITHM') {
+                            setSelectedAlgorithmId(String(payload ?? ''));
+                            return;
+                          }
+                          if (action === 'DEFINE_ARTIFACT_UPDATED' && payload) {
+                            setDefineArtifact(payload);
+                            setProjectConfig((current) => ({
+                              ...current,
+                              define: {
+                                robotModel: payload.robotModel,
+                                sourceType: payload.sourceType,
+                                sourcePath: payload.sourcePath,
+                                ground: payload.environment.ground,
+                                lighting: payload.environment.lighting,
+                              },
+                            }));
+                            appendRuntimeLog('INFO', `Define 工件已更新: robot=${payload.robotModel}, source=${payload.sourceType}`);
+                            return;
+                          }
+                          if (action === 'DEPLOY_CONFIG_UPDATED' && payload) {
+                            setProjectConfig((current) => ({
+                              ...current,
+                              deploy: {
+                                ...current.deploy,
+                                ...payload,
+                              },
+                            }));
+                            return;
+                          }
+                          if (action === 'DIAGNOSE_CONFIG_UPDATED' && payload) {
+                            setProjectConfig((current) => ({
+                              ...current,
+                              diagnose: {
+                                ...current.diagnose,
+                                ...payload,
+                              },
+                            }));
+                            return;
+                          }
+                          if (action === 'START_DESIGN_FLOW') {
+                            setActiveModuleId('design');
+                            setSimulationReplay(undefined);
+                            appendRuntimeLog(
+                              'INFO',
+                              `用户触发“启动算法设计流程”: module=${selectedAlgorithmModule?.name ?? 'unknown'} algorithm=${selectedDesignAlgorithm?.name ?? 'unknown'}`,
+                            );
+                            void designApi.startDesignJob({
+                              defineArtifact,
+                              algorithmId: selectedDesignAlgorithm?.id,
+                              algorithmModuleId: selectedAlgorithmModule?.id,
+                            }).then((createdJob) => {
+                              setDesignJob({
+                                ...createdJob,
+                                title: `${selectedDesignAlgorithm?.name ?? 'Backend Algorithm'} Design Job`,
+                                sample: selectedDesignAlgorithm?.name ?? createdJob.sample,
+                                summary: `${selectedDesignAlgorithm?.family ?? '后端算法'} 已绑定当前 Design 工作流模板，正在执行后端优化与验证。`,
+                                artifacts: {
+                                  ...createdJob.artifacts,
+                                  controllerProfile: selectedDesignAlgorithm?.candidateStructure ?? createdJob.artifacts.controllerProfile,
+                                },
+                              });
+                              appendRuntimeLog('INFO', `Design 任务已创建: id=${createdJob.id}, mode=${createdJob.backendMode ?? 'unknown'}`);
+                            }).catch((error) => {
+                              appendRuntimeLog('ERROR', `Design 任务启动失败: ${error instanceof Error ? error.message : String(error)}`);
+                              setDesignJob({
+                                id: `design-job-${Date.now()}`,
+                                state: 'error',
+                                title: `${selectedDesignAlgorithm?.name ?? 'Backend Algorithm'} Design Job`,
+                                sample: selectedDesignAlgorithm?.name ?? 'Unknown Algorithm',
+                                basedOn: defineArtifact,
+                                currentStage: 'Validation',
+                                summary: '设计任务启动失败，请检查 PerfOpt 后端可达性。',
+                                metrics: [],
+                                artifacts: {
+                                  specId: 'design-spec-er15-001',
+                                  controllerProfile: selectedDesignAlgorithm?.candidateStructure ?? 'backend-defined algorithm',
+                                  ffMode: 'meas',
+                                  optimizer: 'Optuna',
+                                },
+                                backendMode: 'mock',
+                                error: error instanceof Error ? error.message : String(error),
+                              });
+                            });
+                            return;
+                          }
+                          console.log('Plugin Action:', action, payload);
+                        }}
                       />
                     </div>
                   </div>
@@ -353,42 +705,19 @@ export default function App() {
 
         {/* 3. Main Editor Area */}
         <main className="flex-1 flex flex-col overflow-hidden bg-white relative">
-          {/* Tabs Bar */}
-          <div className="h-9 bg-[#f3f3f3] flex items-center overflow-x-auto shrink-0 border-b border-[#e5e5e5]">
-            <div className="flex h-full">
-              <div className="px-4 h-full flex items-center gap-2 bg-white border-r border-[#e5e5e5] border-t-2 border-t-[#007acc] cursor-default">
-                <Box className="w-4 h-4 text-blue-500" />
-                <span className="text-xs text-[#333333]">SimulationView.mu</span>
-                <X className="w-3 h-3 text-[#6f6f6f] hover:bg-[#e8e8e8] rounded" />
-              </div>
-              <div className="px-4 h-full flex items-center gap-2 hover:bg-[#e8e8e8] border-r border-[#e5e5e5] cursor-pointer group">
-                <Terminal className="w-4 h-4 text-emerald-500" />
-                <span className="text-xs text-[#6f6f6f]">system.log</span>
-                <X className="w-3 h-3 text-transparent group-hover:text-[#6f6f6f] hover:bg-[#d8d8d8] rounded" />
-              </div>
+          <div className="h-9 bg-[#f3f3f3] flex items-center justify-between px-4 shrink-0 border-b border-[#e5e5e5]">
+            <div className="flex items-center gap-2">
+              <Box className="w-4 h-4 text-blue-500" />
+              <span className="text-xs font-medium text-[#333333]">Simulation View</span>
             </div>
-            <div className="ml-auto px-4 flex items-center gap-3">
-              <button className="text-[#6f6f6f] hover:text-[#333333]"><Split className="w-4 h-4" /></button>
-              <button className="text-[#6f6f6f] hover:text-[#333333]"><MoreHorizontal className="w-4 h-4" /></button>
+            <div className="text-[10px] text-[#6f6f6f]">
+              {selectedDesignAlgorithm?.name ?? activePlugin.metadata.name}
             </div>
           </div>
 
-            {/* Breadcrumbs */}
-            <div className="h-6 bg-[#ffffff] border-b border-[#f3f3f3] flex items-center px-4 shrink-0 z-10">
-              <div className="flex items-center gap-1 text-[11px] text-[#6f6f6f]">
-                <span>LoongEnv</span>
-                <ChevronRight className="w-3 h-3" />
-                <span>src</span>
-                <ChevronRight className="w-3 h-3" />
-                <span>components</span>
-                <ChevronRight className="w-3 h-3" />
-                <span className="text-[#333333] font-medium">SimulationView.mu</span>
-              </div>
-            </div>
-
             {/* Editor Content (Simulation View) */}
             <div className="flex-1 relative overflow-hidden">
-              <SimulationView />
+              <SimulationView replay={simulationReplay} defineArtifact={defineArtifact} />
             </div>
 
           <div
@@ -410,7 +739,7 @@ export default function App() {
             style={{ height: bottomPanelHeight }}
             className="border-t border-[#e5e5e5] flex flex-col shrink-0 min-h-0"
           >
-            <SystemMonitor />
+            <SystemMonitor logs={runtimeLogs} />
           </div>
         </main>
       </div>
@@ -423,26 +752,15 @@ export default function App() {
             <span>main*</span>
           </div>
           <div className="flex items-center gap-1.5 px-2 hover:bg-white/10 h-full cursor-pointer transition-colors">
-            <X className="w-3.5 h-3.5" />
-            <span>0</span>
-            <ShieldAlert className="w-3.5 h-3.5" />
-            <span>0</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-2 hover:bg-white/10 h-full cursor-pointer transition-colors">
             <Activity className="w-3.5 h-3.5" />
             <span>物理引擎: MuJoCo</span>
           </div>
         </div>
         <div className="flex items-center h-full">
-          <div className="px-2 hover:bg-white/10 h-full cursor-pointer transition-colors">第 1 行, 第 1 列</div>
-          <div className="px-2 hover:bg-white/10 h-full cursor-pointer transition-colors">空格: 2</div>
           <div className="px-2 hover:bg-white/10 h-full cursor-pointer transition-colors">UTF-8</div>
           <div className="px-2 hover:bg-white/10 h-full cursor-pointer transition-colors flex items-center gap-1">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Prettier</span>
-          </div>
-          <div className="px-2 hover:bg-white/10 h-full cursor-pointer transition-colors">
-            <Bell className="w-3.5 h-3.5" />
+            <span>Ready</span>
           </div>
         </div>
       </footer>
